@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Axis 1942 — Strategy Board Game</title>
+  <meta name="description" content="Play the classic 1942 world-war strategy board game on your iPad — hotseat or vs the computer.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Axis 1942">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+  <meta name="theme-color" content="#14161a">
+  <link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+
+  <!-- HOME -->
+  <div id="screen-home" class="screen active">
+    <div class="home-inner">
+      <div class="home-logo">★ ✠</div>
+      <h1>AXIS <span>1942</span></h1>
+      <p class="tagline">The classic world-war strategy board game — spring 1942, the world at war.</p>
+      <div class="home-btns">
+        <div id="btn-continue" class="btn primary big" style="display:none">CONTINUE</div>
+        <div id="btn-new" class="btn primary big">CREATE A HOTSEAT GAME</div>
+        <a class="btn big" href="about.html">ABOUT &amp; HOW TO GET IT</a>
+        <div id="btn-update" class="btn big">🔄 UPDATE APP</div>
+        <div id="btn-feedback" class="btn big">💬 SHARE / FEEDBACK</div>
+      </div>
+    </div>
+    <footer class="site-footer"></footer>
+  </div>
+
+  <!-- NEW GAME -->
+  <div id="screen-new" class="screen">
+    <div class="new-inner">
+      <div class="new-head">
+        <h2>CREATE A HOTSEAT GAME</h2>
+        <div id="new-back" class="btn close">✕</div>
+      </div>
+      <input id="game-title" type="text" placeholder="NAME YOUR GAME" maxlength="30" value="">
+      <h3 class="rule-line">CHOOSE YOUR COMBATANTS</h3>
+      <div class="sides-row"><span class="side-label">AXIS</span><span class="vs">VS</span><span class="side-label">ALLIES</span></div>
+      <div id="powers-grid"></div>
+      <h3 class="rule-line">GAME SETTINGS</h3>
+      <div class="settings">
+        <label class="setting"><input type="checkbox" id="opt-total"> <b>TOTAL VICTORY</b> — a side must control all 13 victory cities (default: 9 Axis / 10 Allies)</label>
+        <label class="setting"><input type="checkbox" id="opt-straits"> <b>TURKISH STRAITS CLOSED</b> — no sea units may enter or leave the Black Sea (sea zone 16)</label>
+        <label class="setting"><input type="checkbox" id="opt-interceptors"> <b>ESCORTS &amp; INTERCEPTORS</b> — fighters may escort and intercept strategic bombing raids</label>
+        <label class="setting"><input type="checkbox" id="custom-territories"> <b>CUSTOMIZE TERRITORIES</b> — reassign starting territories between powers
+          <span id="btn-edit-territories" class="mini-btn" style="display:none">EDIT MAP</span></label>
+      </div>
+      <div id="new-start" class="btn danger big">START CAMPAIGN</div>
+    </div>
+  </div>
+
+  <!-- GAME -->
+  <div id="screen-game" class="screen">
+    <div id="topbar">
+      <div id="btn-menu" class="tb-btn">⚙</div>
+      <div class="tb-block"><label>ROUND</label><div id="tb-round">1</div></div>
+      <div id="tb-powers"></div>
+      <div class="tb-block phase"><div id="tb-phase">PURCHASE</div><div id="tb-dots"></div></div>
+      <div id="tb-vc"></div>
+      <div class="tb-block"><label id="tb-player"></label><div id="tb-ipc"></div></div>
+      <div id="btn-undo" class="tb-btn" title="Undo moves this phase">↩</div>
+      <div id="btn-end-phase" class="tb-btn end">END<br>PHASE</div>
+    </div>
+    <div id="board-wrap">
+      <svg id="board"></svg>
+      <div id="banner"></div>
+      <div id="side-panel"></div>
+    </div>
+  </div>
+
+  <div id="modal-root"></div>
+  <footer class="site-footer game-hidden"></footer>
+
+  <script src="static/js/version.js"></script>
+  <script src="static/js/map-data.js"></script>
+  <script src="static/js/engine.js"></script>
+  <script src="static/js/combat.js"></script>
+  <script src="static/js/ai.js"></script>
+  <script src="static/js/board.js"></script>
+  <script src="static/js/ui.js"></script>
+  <script src="static/js/feedback.js"></script>
+  <script src="static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+# HANDOFF — Axis 1942
+
+_Updated: 2026-07-02_
+
+## Where things stand
+A **complete, playable** digital edition of Axis & Allies 1942 Second Edition as an
+installable PWA. Engine, combat resolver, AI opponent, SVG board, and full UI are built
+and verified. All 29 engine unit tests pass; full AI-vs-AI smoke games run to victory.
+Verified end-to-end in a browser: setup → purchase → drag-drop combat move → dice battle
+board (with artillery support, casualties, capture) → noncombat with stranded-air rescue
+→ mobilize/income → hotseat handoff → AI turns → round rollover and victory-city tracking.
+
+## What we built
+- **`tools/convert-triplea.js`** — converts the TripleA `world_war_ii_v5_1942` community
+  map into `static/js/map-data.js`. Cross-checks incomes (24/41/31/30/42) and the 13
+  victory cities against the official rulebook; fails loudly on mismatch. 96 land + 65 sea
+  spaces, 403 adjacencies, canals (Panama/Suez), full starting setup, and simplified SVG
+  polygon geometry for the faithful board.
+- **`static/js/engine.js`** — six-phase turn state machine, movement legality (blitz, subs,
+  transports, carriers, air range + landing demonstration, canals, Turkish Straits option),
+  purchase/mobilize with IC capacity + damage, capture/liberation/capital looting, income,
+  victory check. Seeded RNG + snapshot/restore. **Territory reassignment** for custom layouts.
+- **`static/js/combat.js`** — decision-driven `Battle` (same code for human dialogs and AI):
+  AA fire, sub surprise strike/submerge, shore bombardment, strategic bombing, class-based
+  hit assignment (subs/air constraints, transports last), battleship two-hit, defenseless
+  transports, retreat, capture. Plus air-landing helpers for noncombat.
+- **`static/js/ai.js`** — rules-legal computer opponent: heuristic purchases, expected-value
+  attack selection, capital defense, front-line reinforcement, safe air landing.
+- **`static/js/board.js`** — SVG world map with pan/zoom (touch + wheel), unit stacks with
+  counts/cargo badges, victory-city stars, IC + damage markers, drag-and-drop with
+  legal-target highlighting.
+- **`static/js/ui.js`** — setup screen (human/computer, names, optional-rule toggles,
+  CUSTOMIZE TERRITORIES editor), top bar (round/phase/VC/IPC), purchase & mobilize panels,
+  battle modal with dice, hotseat handoff, AI turn runner, autosave/continue, undo, game log.
+- PWA shell: `index.html`, `about.html`, `manifest.webmanifest`, `sw.js` (network-first),
+  icons, footer/version, Update button, Share/Feedback.
+
+## Unfinished / future
+- **Deploy to GitHub Pages** is the only remaining step — needs Joe's OK to create the
+  public `ConikerSystems/axis` repo (a cloud classifier blocked the auto-create). Once
+  authorized: `gh repo create ConikerSystems/axis --public --source . --push`, then enable
+  Pages on `main` root. URL will be `conikersystems.github.io/axis/`.
+- AI v2: amphibious invasions and strategic bombing (v1 AI fights on land/sea, not by sea
+  invasion or bombing).
+- Larry Harris Gencon 3.0 alternate scenario (needs its alternate setup data).
+- Low Luck dice mode.
+
+## How to run / test
+- Local preview: `python3 -m http.server 8642` in the repo root → open `localhost:8642`.
+  (A `.claude/launch.json` "axis" config exists for the preview tool.)
+- Tests: `node tests/engine.test.js` and `node tests/smoke.test.js`. Run both before deploy.
+- Regenerate board data: clone `github.com/triplea-maps/world_war_ii_v5_1942`, then
+  `node tools/convert-triplea.js <that repo>`.
+
+## Next steps
+1. Get Joe's go-ahead to create the public GitHub repo, push, enable Pages.
+2. On iPad Safari: open the Pages URL → Share → Add to Home Screen. Use the in-app 🔄
+   Update button after future deploys.
+3. Playtest; gather feedback via the in-app button.
