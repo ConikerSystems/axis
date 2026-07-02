@@ -488,6 +488,24 @@
     const own = this.owner[spaceId];
     return own != null && this.isFriendly(this.current, own) && !this.capturedThisTurn.has(spaceId);
   };
+  // spaces where an air unit can legally end the turn, within remaining movement
+  Game.prototype.airLandingSpots = function (u) {
+    const rem = Engine.UNITS[u.type].move - u.moved;
+    const spots = [];
+    if (rem <= 0) return spots;
+    const dist = this._bfsAir(u.space, rem);
+    for (const [id, cost] of dist) {
+      if (cost === 0) continue;
+      const s = this.space(id);
+      if (!s.sea && this.friendlyAtStart(id)) spots.push({ space: id, cost });
+      else if (s.sea && u.type === "fighter") {
+        const carrier = this.unitsAt(id, x => this.isFriendly(x.power, u.power) && x.type === "carrier" &&
+          this.carrierFighters(x).length < 2)[0];
+        if (carrier) spots.push({ space: id, cost, carrier: carrier.id });
+      }
+    }
+    return spots;
+  };
   Game.prototype._bfsAir = function (from, max) {
     const dist = new Map([[from, 0]]);
     let frontier = [from];
