@@ -4,8 +4,8 @@
 window.Board = (function () {
   "use strict";
 
-  const POWER_COLOR = {
-    soviet: "#8a5240", germany: "#5c6066", uk: "#c0a878", japan: "#d99340", us: "#7d8c58",
+  const POWER_COLOR = { // chip tints matched to the reference app
+    soviet: "#8a2b2b", germany: "#26292e", uk: "#c2a469", japan: "#d5852f", us: "#6d8a48",
   };
   const POWER_FILL = { // muted map fills, weathered-board style
     soviet: "#c08a70", germany: "#8ea3ad", uk: "#d9c49a", japan: "#e2a35c", us: "#a9b385",
@@ -287,11 +287,13 @@ window.Board = (function () {
             transform: `translate(${x},${y})`,
             "data-space": id, "data-power": gr.power, "data-type": gr.type, "data-count": gr.n,
           }, gUnits);
-          el("circle", { r: 17, fill: POWER_COLOR[gr.power], stroke: "#20242a", "stroke-width": 2 }, node);
-          el("text", { y: 5, class: "stack-glyph" }, node).textContent = GLYPH[gr.type];
+          el("circle", { r: 17, fill: POWER_COLOR[gr.power], stroke: "#12141a", "stroke-width": 1.5 }, node);
+          const icon = el("g", { class: "stack-icon", fill: "#f4efe4", color: "#f4efe4" }, node);
+          icon.innerHTML = (window.UNIT_ICONS && UNIT_ICONS[gr.type]) || "";
+          if (!icon.innerHTML) el("text", { y: 5, class: "stack-glyph" }, node).textContent = GLYPH[gr.type];
           if (gr.n > 1) {
-            el("circle", { cx: 13, cy: -12, r: 9, class: "count-badge" }, node);
-            el("text", { x: 13, y: -8, class: "count-text" }, node).textContent = gr.n;
+            el("circle", { cx: 13, cy: 13, r: 9, class: "count-badge" }, node);
+            el("text", { x: 13, y: 17, class: "count-text" }, node).textContent = gr.n;
           }
           if (gr.cargo) {
             el("circle", { cx: -13, cy: -12, r: 8, class: "cargo-badge" }, node);

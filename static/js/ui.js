@@ -6,6 +6,13 @@ window.UI = (function () {
   const MAP = window.MAP_DATA;
   const $ = (sel) => document.querySelector(sel);
   const div = (cls, html) => { const d = document.createElement("div"); if (cls) d.className = cls; if (html != null) d.innerHTML = html; return d; };
+  // a small unit chip (silhouette icon on a nation-colored disc) for battle UI
+  const chipHtml = (type, power) => {
+    const icon = (window.UNIT_ICONS && UNIT_ICONS[type]) || "";
+    const color = (Board.POWER_COLOR && Board.POWER_COLOR[power]) || "#666";
+    if (!icon) return `<span class="chip" style="background:${color}">${Board.GLYPH[type]}</span>`;
+    return `<span class="chip" style="background:${color}"><svg viewBox="-14 -14 28 28" width="22" height="22" fill="#f4efe4" style="color:#f4efe4">${icon}</svg></span>`;
+  };
 
   const PHASE_LABEL = { purchase: "Purchase", combatMove: "Combat Move", combat: "Combat",
     noncombatMove: "Noncombat Move", mobilize: "Mobilize", income: "Collect Income" };
@@ -654,7 +661,7 @@ window.UI = (function () {
         groups[k].n++;
       }
       return `<div class="bs-label">${label}</div>` + Object.values(groups).map(g =>
-        `<div class="bs-unit"><span class="chip ${units[0] ? SIDES[units[0].power] : ""}">${Board.GLYPH[g.type]}</span>
+        `<div class="bs-unit">${chipHtml(g.type, units[0] && units[0].power)}
          ${UNIT_NAME[g.type]}${g.hits ? " (damaged)" : ""}${g.sub ? " (submerged)" : ""} <b>×${g.n}</b></div>`).join("") || "<i>none</i>";
     };
     const refreshSides = () => {
@@ -686,7 +693,7 @@ window.UI = (function () {
         const upd = () => counter.textContent = d.type === "casualties" ?
           `${chosen.size} / ${d.count} selected` : `${chosen.size} selected`;
         for (const u of pool) {
-          const c = div("chip-pick", `<span class="chip ${SIDES[u.power]}">${Board.GLYPH[u.type]}</span>${UNIT_NAME[u.type]}${UNITS[u.type].twoHit && u.hits === 0 ? " (can absorb)" : ""}`);
+          const c = div("chip-pick", `${chipHtml(u.type, u.power)}${UNIT_NAME[u.type]}${UNITS[u.type].twoHit && u.hits === 0 ? " (can absorb)" : ""}`);
           c.onclick = () => {
             if (chosen.has(u.id)) { chosen.delete(u.id); c.classList.remove("on"); }
             else if (chosen.size < max || d.type !== "casualties") { chosen.add(u.id); c.classList.add("on"); }

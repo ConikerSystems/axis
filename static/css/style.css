@@ -110,9 +110,10 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
 .ipc-badge circle { fill: #f3ecd8; stroke: #6f6753; stroke-width: 1; pointer-events: none; }
 .ipc-text { font-size: 13px; text-anchor: middle; fill: #3a3428; font-weight: 800; pointer-events: none; }
 .stack { cursor: grab; }
+.stack-icon { pointer-events: none; }
 .stack-glyph { font-size: 15px; text-anchor: middle; fill: #fff; font-weight: 800; pointer-events: none; }
-.count-badge { fill: #111; stroke: #fff; stroke-width: 1.5; pointer-events: none; }
-.count-text { font-size: 12px; text-anchor: middle; fill: #fff; font-weight: 800; pointer-events: none; }
+.count-badge { fill: #e8b23a; stroke: #12141a; stroke-width: 1.5; pointer-events: none; }
+.count-text { font-size: 12px; text-anchor: middle; fill: #12141a; font-weight: 800; pointer-events: none; }
 .cargo-badge { fill: #2c5c8a; stroke: #fff; stroke-width: 1; pointer-events: none; }
 .cargo-text { font-size: 11px; text-anchor: middle; fill: #fff; font-weight: 800; pointer-events: none; }
 .ghost-text { font-size: 20px; text-anchor: middle; fill: #fff; font-weight: 800; }
