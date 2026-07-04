@@ -119,12 +119,16 @@ window.Board = (function () {
       if (stack && cb.onDragStart) {
         const info = cb.onDragStart(stack.dataset.space, stack.dataset.power);
         if (info && info.targets && info.targets.length) {
-          drag = { from: stack.dataset.space, power: stack.dataset.power, targets: new Set(info.targets) };
+          drag = { from: stack.dataset.space, power: stack.dataset.power,
+            type: stack.dataset.type, targets: new Set(info.targets) };
           highlight([...drag.targets], "target");
           const p = svgPoint(e.clientX, e.clientY);
           drawGhost(p, stack.dataset.count, stack.dataset.power);
           return;
         }
+        // stack with no legal moves: a tap on it should still open the unit picker
+        if (cb.onStackTap) { drag = { from: stack.dataset.space, power: stack.dataset.power,
+          type: stack.dataset.type, targets: new Set(), tapOnly: true }; return; }
       }
       panning = true;
     });
@@ -168,7 +172,9 @@ window.Board = (function () {
         const t = spaceAt(e);
         const d = drag; drag = null;
         gDrag.innerHTML = ""; clearHighlight();
-        if (t && d.targets.has(t) && cb.onDrop) cb.onDrop(d.from, t, d.power);
+        if (!moved && e.type === "pointerup" && cb.onStackTap) {
+          cb.onStackTap(d.from, d.power, d.type); // a tap on a piece opens the unit picker
+        } else if (!d.tapOnly && t && d.targets.has(t) && cb.onDrop) cb.onDrop(d.from, t, d.power);
       } else if (!moved && e.type === "pointerup") {
         const t = spaceAt(e);
         if (t && cb.onSpaceTap) cb.onSpaceTap(t, e);

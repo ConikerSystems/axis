@@ -116,11 +116,12 @@ window.UI = (function () {
         onSpaceTap: onSpaceTap,
         onDragStart: onDragStart,
         onDrop: onDrop,
+        onStackTap: onStackTap,
       });
     }
     board.setGame(game);
     if (location.hostname === "localhost" || location.hostname === "127.0.0.1")
-      window.__ui = { get game() { return game; }, onDrop, onDragStart, board: () => board };
+      window.__ui = { get game() { return game; }, onDrop, onDragStart, onStackTap, openMovePicker, board: () => board };
     startPhase();
   }
 
@@ -177,6 +178,7 @@ window.UI = (function () {
     topBar();
     board.setGame(game);
     board.clearHighlight();
+    moveSelect = null;
     sidePanel(null);
     autosave();
     if (game.winner) return victoryScreen();
@@ -297,7 +299,8 @@ window.UI = (function () {
     d.appendChild(div("panel-title", combat ? "COMBAT MOVE" : "NONCOMBAT MOVE"));
     d.appendChild(div("panel-body", combat ?
       `<ul class="help">
-        <li><b>Drag</b> a unit stack to a highlighted space to move or attack.</li>
+        <li><b>Tap</b> one of your pieces to select exactly which units move, then tap a highlighted space to attack.</li>
+        <li>Or <b>drag</b> a unit stack straight to a highlighted space.</li>
         <li>Drag land units onto a <b>sea zone</b> with your transport to load.</li>
         <li>Drag a <b>transport</b> onto an enemy coast to declare an amphibious assault.</li>
         <li>Tap an enemy territory with your <b>bomber</b> on it to order a strategic bombing raid.</li>
@@ -422,6 +425,11 @@ window.UI = (function () {
   // ================= space interactions =================
   function onSpaceTap(id) {
     if (!game) return;
+    if (moveSelect) {
+      if (moveSelect.targets.has(id)) executeMoveSelect(id);
+      else cancelMoveSelect();
+      return;
+    }
     if (game.phase === "mobilize" && mobilizeTarget && mobilizeTarget.spaces.has(id)) {
       try {
         game.place(mobilizeTarget.unit, id);
@@ -461,6 +469,9 @@ window.UI = (function () {
       body.appendChild(div("ulist " + SIDES[p], `<div class="ulist-head">${EMBLEM[p]} ${POWER_NAMES[p]}</div>` + rows));
     }
     const buttons = [{ label: "CLOSE", cls: "" }];
+    // move own units from here (tap-to-select flow)
+    if (isMovePhase() && Object.keys(moverGroups(id, game.current)).length)
+      buttons.unshift({ label: "➤ MOVE UNITS", cls: "primary", value: "movePick" });
     // special orders in combat move
     if (game.phase === "combatMove" && game.players[game.current].type === "human") {
       const myBombers = game.unitsAt(id, u => u.power === game.current && u.type === "bomber" && !u.sbr);
@@ -477,6 +488,7 @@ window.UI = (function () {
         if (b) { try { game.setSBR(b.id); banner("Strategic bombing raid declared on " + s.name); } catch (e) { banner(e.message); } }
       }
       if (v === "seaAtk") { game.toggleSeaAttack(id); banner(game.declaredSeaAttacks.has(id) ? "Attack declared" : "Attack cancelled"); }
+      if (v === "movePick") openMovePicker(id, game.current, null);
     });
   }
 
@@ -514,21 +526,22 @@ window.UI = (function () {
     return { targets: [...targets] };
   }
 
-  async function onDrop(from, to, power) {
-    if (!isMovePhase()) return;
-    const toSpace = MAP.spaces[to];
+  // movable units at a space for the current power, grouped by type
+  function moverGroups(from, power) {
     const movers = game.unitsAt(from, u => u.power === power && !UNITS[u.type].facility &&
       !u.onTransport && !u.onCarrier);
-    // group options per type
-    const rows = [];
     const groups = {};
     for (const u of movers) (groups[u.type] = groups[u.type] || []).push(u);
-    for (const [type, list] of Object.entries(groups)) {
+    return groups;
+  }
+  // what could each unit type at `from` do if sent to `to`? → [{type, mode, eligible}]
+  function rowsFor(from, to, power) {
+    const toSpace = MAP.spaces[to];
+    const rows = [];
+    for (const [type, list] of Object.entries(moverGroups(from, power))) {
       const info = UNITS[type];
-      let eligible = [];
-      let mode = "move";
+      let eligible = [], mode = "move";
       if (info.land && toSpace.sea) {
-        // load onto transports there
         const trs = game.unitsAt(to, x => x.type === "transport" && game.isFriendly(x.power, power));
         eligible = list.filter(u => trs.some(t => game.canLoad(u, t)));
         mode = "load";
@@ -541,15 +554,10 @@ window.UI = (function () {
       }
       if (eligible.length) rows.push({ type, mode, eligible, take: eligible.length });
     }
-    if (!rows.length) return;
-    // quantity dialog (skip if single unit)
-    let confirmed = rows;
-    if (rows.length > 1 || rows[0].eligible.length > 1) {
-      confirmed = await moveQuantityDialog(rows, to);
-      if (!confirmed) return;
-    }
-    // execute
-    for (const r of confirmed) {
+    return rows;
+  }
+  function performMoves(rows, to, power) {
+    for (const r of rows) {
       let n = r.take;
       for (const u of r.eligible) {
         if (n <= 0) break;
@@ -566,9 +574,118 @@ window.UI = (function () {
         } catch (e) { banner(e.message); break; }
       }
     }
+  }
+
+  async function onDrop(from, to, power) {
+    if (!isMovePhase()) return;
+    const toSpace = MAP.spaces[to];
+    const rows = rowsFor(from, to, power);
+    if (!rows.length) return;
+    // quantity dialog (skip if single unit)
+    let confirmed = rows;
+    if (rows.length > 1 || rows[0].eligible.length > 1) {
+      confirmed = await moveQuantityDialog(rows, to);
+      if (!confirmed) return;
+    }
+    performMoves(confirmed, to, power);
     board.render(); topBar();
     if (game.phase === "combatMove" && !toSpace.sea &&
       confirmed.some(r => r.mode === "offload")) banner("Amphibious assault declared on " + toSpace.name);
+  }
+
+  // ---- tap-to-select movement (select pieces, then tap a highlighted destination) ----
+  let moveSelect = null; // {from, power, takes:{type:n}, targets:Set}
+
+  function onStackTap(from, power, tappedType) {
+    if (!isMovePhase() || power !== game.current) { spaceInfoModal(from); return; }
+    openMovePicker(from, power, tappedType);
+  }
+
+  function openMovePicker(from, power, tappedType) {
+    cancelMoveSelect();
+    const groups = moverGroups(from, power);
+    const types = Object.keys(groups).filter(t => {
+      const canMove = groups[t].some(u => u.moved < UNITS[u.type].move ||
+        (t === "transport" && game.cargoOf(u).length && !u.usedThisTurn));
+      return canMove;
+    });
+    if (!types.length) { spaceInfoModal(from); return; }
+    const takes = {};
+    for (const t of types) takes[t] = t === tappedType ? groups[t].length : 0;
+    if (!tappedType || !takes[tappedType]) takes[types[0]] = groups[types[0]].length;
+
+    const body = div("");
+    body.appendChild(div("modal-note", "Choose which pieces to move, then tap a highlighted space on the map."));
+    for (const t of types) {
+      const row = div("unit-row");
+      row.innerHTML = `<div class="unit-label">${chipHtml(t, power)} ${UNIT_NAME[t].toUpperCase()}</div>
+        <div class="unit-stats"><span class="stepper"><button class="minus">−</button><b>${takes[t]}</b><button class="plus">+</button></span></div>`;
+      const num = row.querySelector("b");
+      row.querySelector(".plus").onclick = () => { takes[t] = Math.min(groups[t].length, takes[t] + 1); num.textContent = takes[t]; };
+      row.querySelector(".minus").onclick = () => { takes[t] = Math.max(0, takes[t] - 1); num.textContent = takes[t]; };
+      body.appendChild(row);
+    }
+    openModal("SELECT UNITS — " + MAP.spaces[from].name.toUpperCase(), body, [
+      { label: "CANCEL", cls: "", value: null },
+      { label: "CHOOSE DESTINATION", cls: "primary", value: "go" },
+    ]).then((v) => {
+      if (v !== "go") return;
+      const targets = selectionTargets(from, power, takes);
+      if (!targets.size) { banner("Those units have no legal moves."); return; }
+      moveSelect = { from, power, takes, targets };
+      board.highlight([...targets], "target");
+      banner(`Tap a highlighted space to ${game.phase === "combatMove" ? "move / attack" : "move"} — tap anywhere else to cancel.`, true);
+    });
+  }
+
+  function selectionTargets(from, power, takes) {
+    const targets = new Set();
+    const groups = moverGroups(from, power);
+    for (const [type, n] of Object.entries(takes)) {
+      if (n <= 0 || !groups[type]) continue;
+      for (const u of groups[type]) {
+        for (const [id] of game.reachable(u, game.phase)) targets.add(id);
+      }
+      if (UNITS[type].land) { // load onto adjacent friendly transports
+        for (const nb of MAP.spaces[from].conn) {
+          if (!MAP.spaces[nb].sea) continue;
+          const trs = game.unitsAt(nb, x => x.type === "transport" && game.isFriendly(x.power, power));
+          if (groups[type].some(u => trs.some(t => game.canLoad(u, t)))) targets.add(nb);
+        }
+      }
+      if (type === "transport") { // offload to adjacent coasts
+        for (const t of groups[type].filter(u => game.cargoOf(u).length && !u.usedThisTurn)) {
+          for (const nb of MAP.spaces[t.space].conn) {
+            const ns = MAP.spaces[nb];
+            if (ns.sea || ns.impassable) continue;
+            const hostile = game.isHostileSpace(power, nb) || game.hasEnemyUnits(power, nb);
+            if (game.phase === "combatMove" ? hostile : !hostile) targets.add(nb);
+          }
+        }
+      }
+    }
+    return targets;
+  }
+
+  function cancelMoveSelect(silent) {
+    if (!moveSelect) return;
+    moveSelect = null;
+    board.clearHighlight();
+    banner(null);
+    if (!silent) banner("Move cancelled.");
+  }
+
+  function executeMoveSelect(to) {
+    const { from, power, takes } = moveSelect;
+    moveSelect = null;
+    board.clearHighlight(); banner(null);
+    const rows = rowsFor(from, to, power);
+    for (const r of rows) r.take = Math.min(takes[r.type] || 0, r.eligible.length);
+    performMoves(rows.filter(r => r.take > 0), to, power);
+    board.render(); topBar();
+    const toSpace = MAP.spaces[to];
+    if (game.phase === "combatMove" && !toSpace.sea && rows.some(r => r.take > 0 && r.mode === "offload"))
+      banner("Amphibious assault declared on " + toSpace.name);
   }
 
   function moveQuantityDialog(rows, to) {
