@@ -502,7 +502,7 @@ window.UI = (function () {
     const movers = game.unitsAt(spaceId, u => u.power === power && !UNITS[u.type].facility &&
       !u.onTransport && !u.onCarrier);
     for (const u of movers) {
-      for (const [id] of game.reachable(u, game.phase)) targets.add(id);
+      for (const [id, info] of game.reachable(u, game.phase)) { if (info.endOk === false) continue; targets.add(id); }
     }
     // load option: adjacent sea zones with friendly transports with room
     const landUnits = movers.filter(u => UNITS[u.type].land && u.moved === 0);
@@ -644,7 +644,7 @@ window.UI = (function () {
     for (const [type, n] of Object.entries(takes)) {
       if (n <= 0 || !groups[type]) continue;
       for (const u of groups[type]) {
-        for (const [id] of game.reachable(u, game.phase)) targets.add(id);
+        for (const [id, info] of game.reachable(u, game.phase)) { if (info.endOk === false) continue; targets.add(id); }
       }
       if (UNITS[type].land) { // load onto adjacent friendly transports
         for (const nb of MAP.spaces[from].conn) {

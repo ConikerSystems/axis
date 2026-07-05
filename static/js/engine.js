@@ -93,6 +93,7 @@
       this.battles = [];         // pending battles for combat phase
       this.capturedThisTurn = new Set();
       this.winner = null;
+      this._snapshotTurnStart();
       this._log(`Game start. Seed ${this.seed}.`);
     }
 
@@ -155,14 +156,28 @@
       return this.unitsAt(spaceId, u => !this.isFriendly(power, u.power)).length > 0;
     }
 
+    // snapshot state that the rules read as "at the start of your turn"
+    _snapshotTurnStart() {
+      const p = this.current;
+      // canal control: you cannot use a canal the turn you capture it (rulebook p.9)
+      this.canalOwnerAtStart = {};
+      for (const c of Object.values(this.map.canals))
+        for (const t of c.landTerritories) this.canalOwnerAtStart[t] = this.owner[t];
+      // sea zones hostile to you at turn start (sea retreats must go to a start-friendly zone)
+      this.seaHostileAtStart = new Set();
+      for (const [id, s] of Object.entries(this.map.spaces))
+        if (s.sea && this.isHostileSpace(p, id)) this.seaHostileAtStart.add(id);
+    }
+
     // ---------- canals & adjacency for sea movement ----------
     _canalBlocked(power, a, b) {
       // optional rule: Turkey closed the straits — no sea units into or out of sz16
       if (this.options.straits && (a === "sz16" || b === "sz16")) return true;
+      const owns = this.canalOwnerAtStart || this.owner; // control read at start of turn
       for (const c of Object.values(this.map.canals)) {
         const zs = c.seaZones;
         if ((zs[0] === a && zs[1] === b) || (zs[0] === b && zs[1] === a)) {
-          const ok = c.landTerritories.every(t => this.owner[t] != null && this.isFriendly(power, this.owner[t]));
+          const ok = c.landTerritories.every(t => owns[t] != null && this.isFriendly(power, owns[t]));
           if (!ok) return true;
         }
       }
@@ -213,7 +228,8 @@
               frontier.push({ at: nb, used: cost });
             } else {
               seen.set(nb, cost);
-              res.set(nb, { cost, hostile });
+              // combat move must END in a hostile space (tanks may end friendly only via blitz)
+              res.set(nb, { cost, hostile, endOk: hostile || !!info.blitz });
               if (!hostile) { frontier.push({ at: nb, used: cost }); }
               else if (info.blitz && cost < mv && !this.hasEnemyUnits(power, nb) && !this.unitsAt(nb, x => UNITS[x.type].facility || UNITS[x.type].aa).length) {
                 // tank may blitz through empty hostile territory
@@ -264,6 +280,7 @@
       if (phase !== this.phase) throw new Error("wrong phase");
       const r = this.reachable(u, phase);
       if (!r.has(to)) throw new Error("illegal move");
+      if (r.get(to).endOk === false) throw new Error("combat move must end in a hostile territory");
       const cost = r.get(to).cost;
       const from = u.space;
       u.moved += cost;
@@ -346,9 +363,11 @@
     // ---------- phase: purchase ----------
     buy(unitType, qty) {
       if (this.phase !== "purchase") throw new Error("wrong phase");
+      // a power whose capital is occupied cannot buy units (rulebook p.19)
+      if (qty > 0 && !this.capitalHeld(this.current)) throw new Error("capital occupied — cannot purchase");
       const cost = UNITS[unitType].cost * qty;
-      const spent = this.purchases.reduce((s, p) => s + UNITS[p.unit].cost * p.qty, 0);
-      if (spent + cost > this.ipc[this.current]) throw new Error("not enough IPCs");
+      // affordability must account for IC-repair spending too (shared treasury)
+      if (this.purchaseSpent() + cost > this.ipc[this.current]) throw new Error("not enough IPCs");
       const ex = this.purchases.find(p => p.unit === unitType);
       if (ex) ex.qty += qty; else this.purchases.push({ unit: unitType, qty });
       if ((ex ? ex.qty : qty) < 0) throw new Error("negative");
@@ -428,8 +447,9 @@
       for (const id of contested) this.battles.push({ space: id, sea: !!this.space(id).sea,
         amphib: !!this.assaults[id], resolved: false });
       for (const id of sbrTargets) this.battles.push({ space: id, sbr: true, resolved: false });
-      // resolve order: sea battles first (amphib sources), then SBR, then land
-      this.battles.sort((a, b) => (b.sea ? 2 : b.sbr ? 1 : 0) - (a.sea ? 2 : a.sbr ? 1 : 0));
+      // rulebook combat order (p.14): strategic bombing, then amphibious/sea, then general land combat
+      const w = (x) => x.sbr ? 2 : x.sea ? 1 : 0;
+      this.battles.sort((a, b) => w(b) - w(a));
     }
 
     // ---------- phase: mobilize ----------
@@ -526,6 +546,7 @@
         this._log(`Round ${this.round - 1} complete. VC axis ${axisVC} / allies ${alliesVC}.`);
       } else this.turnIndex++;
       this.phase = "purchase";
+      this._snapshotTurnStart(); // canal control + hostile-sea state for the new current power
       // skip phases for capital-less powers is handled by UI (purchase/income disabled)
     }
 
@@ -569,6 +590,8 @@
         ipc: this.ipc, round: this.round, turnIndex: this.turnIndex, phase: this.phase,
         purchases: this.purchases, moves: this.moves, assaults: this.assaults,
         battles: this.battles, capturedThisTurn: [...this.capturedThisTurn],
+        declaredSeaAttacks: [...this.declaredSeaAttacks],
+        canalOwnerAtStart: this.canalOwnerAtStart, seaHostileAtStart: [...(this.seaHostileAtStart || [])],
         winner: this.winner, log: this.log.slice(-400),
       });
     }
@@ -582,7 +605,11 @@
       g.ipc = d.ipc; g.round = d.round; g.turnIndex = d.turnIndex; g.phase = d.phase;
       g.purchases = d.purchases; g.moves = d.moves; g.assaults = d.assaults;
       g.battles = d.battles; g.capturedThisTurn = new Set(d.capturedThisTurn);
+      g.declaredSeaAttacks = new Set(d.declaredSeaAttacks || []);
+      g.canalOwnerAtStart = d.canalOwnerAtStart || null;
+      g.seaHostileAtStart = new Set(d.seaHostileAtStart || []);
       g.winner = d.winner; g.log = d.log;
+      if (!g.canalOwnerAtStart) g._snapshotTurnStart();
       return g;
     }
   }

@@ -144,6 +144,67 @@ t("aaa cannot move in combat move", () => {
   ok(g.reachable(aa, "noncombatMove").size > 0, "moves in noncombat");
 });
 
+console.log("— rules-audit regressions —");
+t("repair spending counts against purchase budget (no overspend)", () => {
+  const g = mk(); g.ipc.soviet = 10;
+  g.icDamage["karelia_s_s_r"] = 5;
+  g.repairIC("karelia_s_s_r", 5); // spends 5, leaving 5
+  let threw = false;
+  try { g.buy("tank", 1); } catch (e) { threw = true; } // tank costs 6 > 5 remaining
+  ok(threw, "cannot buy beyond treasury minus repairs");
+  g.buy("infantry", 1); // 3 <= 5, ok
+  g.endPurchase();
+  ok(g.ipc.soviet >= 0, "treasury never negative: " + g.ipc.soviet);
+  eq(g.ipc.soviet, 10 - 5 - 3);
+});
+t("capital-occupied power cannot purchase", () => {
+  const g = mk();
+  g.owner["russia"] = "germany"; // moscow taken
+  let threw = false;
+  try { g.buy("infantry", 1); } catch (e) { threw = true; }
+  ok(threw, "no purchasing without your capital");
+});
+t("combat move must end in a hostile space (non-tank land)", () => {
+  const g = mk(); g.phase = "combatMove";
+  const inf = g.unitsAt("karelia_s_s_r", u => u.type === "infantry")[0];
+  const r = g.reachable(inf, "combatMove");
+  // west_russia is german (hostile) → endOk; a friendly neighbor → endOk false
+  ok(r.get("west_russia") && r.get("west_russia").endOk !== false, "hostile is a legal end");
+  const friendlyNb = [...r].find(([id, i]) => i.endOk === false);
+  if (friendlyNb) {
+    let threw = false;
+    try { g.moveUnit(inf.id, friendlyNb[0], "combatMove"); } catch (e) { threw = true; }
+    ok(threw, "cannot end combat move in friendly territory");
+  }
+});
+t("tank may still end combat move friendly (blitz)", () => {
+  const g = mk(); g.phase = "combatMove";
+  for (const u of g.unitsAt("finland")) u.dead = true; g.units = g.units.filter(u => !u.dead);
+  const tank = g._spawn("tank", "soviet", "karelia_s_s_r");
+  const r = g.reachable(tank, "combatMove");
+  ok(r.get("norway") && r.get("norway").endOk !== false, "tank blitz end allowed");
+});
+t("SBR resolves before land/sea battles (combat order)", () => {
+  const g = mk({ seed: 5 }); g.turnIndex = 1; g.phase = "combatMove";
+  const bmb = g._spawn("bomber", "germany", "germany");
+  g.moveUnit(bmb.id, "karelia_s_s_r", "combatMove"); g.setSBR(bmb.id);
+  for (let i = 0; i < 4; i++) g._spawn("infantry", "germany", "finland");
+  for (const u of g.unitsAt("finland", u => u.power === "germany" && u.type === "infantry"))
+    g.moveUnit(u.id, "karelia_s_s_r", "combatMove");
+  g.endCombatMove();
+  ok(g.battles[0].sbr, "SBR battle sorted first, got: " + JSON.stringify(g.battles.map(b => b.sbr ? "sbr" : b.sea ? "sea" : "land")));
+});
+t("canal cannot be used the turn it is captured", () => {
+  const g = mk({ seed: 9 }); g.turnIndex = 1; g.phase = "combatMove"; // germany
+  // give germany a fleet at sz19 (Pacific) and control of Central America mid-turn
+  const sub = g._spawn("submarine", "germany", "sz19");
+  g.owner["central_america"] = "germany";        // "just captured" — but snapshot was at turn start
+  const r = g.reachable(sub, "combatMove");
+  ok(!r.has("sz18"), "Panama closed the turn Central America is captured");
+  g.canalOwnerAtStart["central_america"] = "germany"; // as if held since start
+  ok(g.reachable(sub, "combatMove").has("sz18"), "canal open when held since turn start");
+});
+
 console.log("— purchase & mobilize —");
 t("purchase and mobilize flow", () => {
   const g = mk();

@@ -42,6 +42,12 @@ window.Board = (function () {
         <stop offset="70%" stop-color="#000" stop-opacity="0"/>
         <stop offset="100%" stop-color="#000" stop-opacity="0.25"/>
       </radialGradient>
+      <radialGradient id="chipDome" cx="38%" cy="32%" r="80%">
+        <stop offset="0%" stop-color="#fff" stop-opacity="0.32"/>
+        <stop offset="45%" stop-color="#fff" stop-opacity="0.06"/>
+        <stop offset="72%" stop-color="#000" stop-opacity="0"/>
+        <stop offset="100%" stop-color="#000" stop-opacity="0.34"/>
+      </radialGradient>
       <marker id="star" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="10" markerHeight="10">
         <path d="M5 0l1.4 3.4L10 3.8 7.3 6.2l.9 3.8L5 8 1.8 10l.9-3.8L0 3.8l3.6-.4z" fill="#fff"/>
       </marker>`;
@@ -293,10 +299,17 @@ window.Board = (function () {
             transform: `translate(${x},${y})`,
             "data-space": id, "data-power": gr.power, "data-type": gr.type, "data-count": gr.n,
           }, gUnits);
-          el("circle", { r: 17, fill: POWER_COLOR[gr.power], stroke: "#12141a", "stroke-width": 1.5 }, node);
-          const icon = el("g", { class: "stack-icon", fill: "#f4efe4", color: "#f4efe4" }, node);
-          icon.innerHTML = (window.UNIT_ICONS && UNIT_ICONS[gr.type]) || "";
-          if (!icon.innerHTML) el("text", { y: 5, class: "stack-glyph" }, node).textContent = GLYPH[gr.type];
+          el("circle", { r: 17, fill: POWER_COLOR[gr.power], stroke: "#0c0e12", "stroke-width": 1.5 }, node);
+          el("circle", { r: 16, fill: "url(#chipDome)", "pointer-events": "none" }, node); // plastic sheen
+          const markup = (window.UNIT_ICONS && UNIT_ICONS[gr.type]) || "";
+          if (markup) {
+            // sculpted relief: dark offset shadow layer under a light top layer
+            const sh = el("g", { class: "stack-icon", fill: "#0a0b0e", color: "#0a0b0e",
+              opacity: 0.32, transform: "translate(0.7,1.1)", "pointer-events": "none" }, node);
+            sh.innerHTML = markup;
+            const ic = el("g", { class: "stack-icon", fill: "#f6f1e6", color: "#f6f1e6", "pointer-events": "none" }, node);
+            ic.innerHTML = markup;
+          } else el("text", { y: 5, class: "stack-glyph" }, node).textContent = GLYPH[gr.type];
           if (gr.n > 1) {
             el("circle", { cx: 13, cy: 13, r: 9, class: "count-badge" }, node);
             el("text", { x: 13, y: 17, class: "count-text" }, node).textContent = gr.n;

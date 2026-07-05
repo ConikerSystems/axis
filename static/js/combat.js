@@ -405,8 +405,10 @@
         for (const sId of candidates) {
           if (!this.s.conn.includes(sId)) continue;
           const sp = g.space(sId);
-          if (UNITS[u.type].sea ? (sp.sea && !g.isHostileSpace(this.attacker, sId)) :
-            (!sp.sea && !sp.impassable && g.owner[sId] && g.isFriendly(this.attacker, g.owner[sId]) && !g.capturedThisTurn.has(sId)))
+          if (UNITS[u.type].sea
+            // sea retreat must go to a zone that was friendly at the START of the turn (p.18)
+            ? (sp.sea && !g.isHostileSpace(this.attacker, sId) && !(g.seaHostileAtStart && g.seaHostileAtStart.has(sId)))
+            : (!sp.sea && !sp.impassable && g.owner[sId] && g.isFriendly(this.attacker, g.owner[sId]) && !g.capturedThisTurn.has(sId)))
             opts.add(sId);
         }
       }
