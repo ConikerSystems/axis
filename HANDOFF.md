@@ -2,6 +2,19 @@
 
 _Updated: 2026-07-05 (v1.3.0)_
 
+## v1.5 (2026-07-05)
+- **Readability overhaul**: chips 23px (was 17), icons redrawn & 1.5× (fighter=single-engine
+  w/ prop vs bomber=wide 4-engine; soldier vs cannon clearly distinct), count badges 16px,
+  territory names 25px bold w/ cream outline, IPC badges + sea-zone numbers + VC stars + IC
+  icons all bigger.
+- **📊 Country Summary** in the top bar: per-power IPC in hand, territory production,
+  territories, victory cities, unit counts + Axis/Allies totals.
+- **Battle screen simplified**: strength table per side (×count @value = total, artillery
+  support shown as @1–2) with ATTACK/DEFENSE TOTALs; dice grouped by "hits on ≤N".
+- **Mobilize UX**: sticky unit selection, place one per tap across any territories, live
+  capacity re-highlight, auto-advance to next unit type; first type preselected.
+- Amphib generality proven with a second-power test (US assault on Morocco). 39 tests pass.
+
 ## v1.4 (2026-07-05)
 - **AI turns fully automatic**: no confirmations even vs human defenders (AI assigns
   the defender's casualties); live action feed (#ai-feed) shows purchases, captures,

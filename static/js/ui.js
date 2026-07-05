@@ -205,10 +205,12 @@ window.UI = (function () {
         banner("NONCOMBAT MOVE — reposition units and land your aircraft.");
         sidePanel(moveHelpPanel(false));
         break;
-      case "mobilize":
+      case "mobilize": {
         if (!game.purchases.some(p => p.qty > 0)) { game.endMobilize(); return startPhase(); }
-        openMobilizePanel();
+        const first = game.purchases.find(p => p.qty > 0);
+        openMobilizePanel(first ? first.unit : null); // first type preselected, ready to tap
         break;
+      }
       case "income":
         game.collectIncome();
         topBar();
@@ -272,6 +274,46 @@ window.UI = (function () {
       banner("Moves undone — phase restarted.");
     }
   });
+
+  // ---- country summary (📊): treasury, production, territories, VCs, forces ----
+  function openSummary() {
+    if (!game) return;
+    const body = div("");
+    const table = div("summary-table");
+    table.innerHTML = `<div class="sum-row sum-head">
+      <span class="sum-name">POWER</span><span>IPC<br><small>in hand</small></span>
+      <span>PRODUCTION<br><small>territory pts</small></span><span>TERRITORIES</span>
+      <span>★ CITIES</span><span>UNITS</span></div>`;
+    const sideTotals = { axis: { ipc: 0, prod: 0, terr: 0, vc: 0, units: 0 },
+      allies: { ipc: 0, prod: 0, terr: 0, vc: 0, units: 0 } };
+    for (const p of POWERS) {
+      const prod = game.production(p);
+      const terr = Object.values(game.owner).filter(o => o === p).length;
+      const vc = Object.entries(MAP.spaces).filter(([id, s]) => s.vc && game.owner[id] === p).length;
+      const units = game.units.filter(u => !u.dead && u.power === p && u.type !== "factory").length;
+      const st = sideTotals[SIDES[p]];
+      st.ipc += game.ipc[p]; st.prod += prod; st.terr += terr; st.vc += vc; st.units += units;
+      const row = div("sum-row " + SIDES[p] + (p === game.current ? " current" : ""));
+      row.innerHTML = `<span class="sum-name">${EMBLEM[p]} ${POWER_NAMES[p]}
+          <small>${game.players[p].name}${game.players[p].type === "ai" ? " (Computer)" : ""}${game.capitalHeld(p) ? "" : " · ⚠ capital lost"}</small></span>
+        <span class="green"><b>${game.ipc[p]}</b></span><span><b>${prod}</b></span>
+        <span>${terr}</span><span>${vc}</span><span>${units}</span>`;
+      table.appendChild(row);
+    }
+    for (const side of ["axis", "allies"]) {
+      const t = sideTotals[side];
+      const row = div("sum-row total " + side);
+      row.innerHTML = `<span class="sum-name">${side === "axis" ? "AXIS TOTAL" : "ALLIES TOTAL"}</span>
+        <span class="green"><b>${t.ipc}</b></span><span><b>${t.prod}</b></span>
+        <span>${t.terr}</span><span>${t.vc}</span><span>${t.units}</span>`;
+      table.appendChild(row);
+    }
+    body.appendChild(table);
+    const need = game.options.totalVictory ? [13, 13] : [9, 10];
+    body.appendChild(div("modal-note", `Round ${game.round} · Victory: Axis needs ${need[0]} cities, Allies need ${need[1]}`));
+    openModal("COUNTRY SUMMARY", body, [{ label: "CLOSE", cls: "primary" }]);
+  }
+  $("#btn-summary").addEventListener("click", openSummary);
 
   $("#btn-menu").addEventListener("click", async () => {
     const choice = await openModal("MENU", div("", `<p class="modal-note">${game ? game.title : ""}</p>`), [
@@ -381,47 +423,57 @@ window.UI = (function () {
   }
 
   // ---- mobilize panel ----
-  function openMobilizePanel() {
+  // Sticky selection: pick a unit type once, then tap territory after territory —
+  // each tap places ONE unit, so purchases can be spread across the map freely.
+  let mobilizeTarget = null;
+  function mobilizeHighlight(ut) {
+    const ids = [];
+    const info = UNITS[ut];
+    if (info.facility) {
+      for (const [id, s] of Object.entries(MAP.spaces)) {
+        if (!s.sea && game.owner[id] === game.current && (s.ipc || 0) >= 1 &&
+          !game.capturedThisTurn.has(id) && !game.unitsAt(id, u => u.type === "factory").length) ids.push(id);
+      }
+    } else {
+      for (const ic of game.eligibleICs(game.current)) {
+        if (game._placedCount(ic) >= game.mobilizeCapacity(ic)) continue;
+        if (info.sea || ut === "fighter") for (const nb of MAP.spaces[ic].conn) if (MAP.spaces[nb].sea) ids.push(nb);
+        if (!info.sea) ids.push(ic);
+      }
+    }
+    board.highlight(ids, "place");
+    mobilizeTarget = { unit: ut, spaces: new Set(ids) };
+    return ids.length;
+  }
+  function openMobilizePanel(keepSelection) {
+    let selected = keepSelection || null;
     const d = div("panel");
-    let selected = null;
     const render = () => {
       d.innerHTML = "";
       d.appendChild(div("panel-title", "MOBILIZE NEW UNITS"));
-      d.appendChild(div("panel-sub", "Select a unit, then tap a highlighted space"));
+      d.appendChild(div("panel-sub", selected
+        ? "Tap a green space to place 1 " + UNIT_NAME[selected] + " — repeat anywhere eligible"
+        : "Select a unit type, then tap green spaces to place them one by one"));
+      let any = false;
       for (const p of game.purchases) {
         if (p.qty <= 0) continue;
+        any = true;
         const row = div("unit-row selectable" + (selected === p.unit ? " on" : ""));
-        row.innerHTML = `<div class="unit-label">${UNIT_NAME[p.unit].toUpperCase()}</div>
-          <div class="unit-stats"><b>×${p.qty}</b></div>`;
-        row.onclick = () => { selected = p.unit; render(); highlightPlacement(p.unit); };
+        row.innerHTML = `<div class="unit-label">${chipHtml(p.unit, game.current)} ${UNIT_NAME[p.unit].toUpperCase()}</div>
+          <div class="unit-stats"><b>${p.qty} left</b></div>`;
+        row.onclick = () => { selected = p.unit; mobilizeHighlight(p.unit); render(); };
         d.appendChild(row);
       }
-      if (!game.purchases.some(p => p.qty > 0))
-        d.appendChild(div("panel-body", "All units placed. Unplaced purchases are refunded when you end the phase."));
+      if (!any) {
+        d.appendChild(div("panel-body", "✅ All units placed."));
+        board.clearHighlight(); mobilizeTarget = null;
+      }
       d.appendChild(div("panel-cta", `Press <b>END PHASE</b> to finish ↗`));
     };
-    const highlightPlacement = (ut) => {
-      const ids = [];
-      const info = UNITS[ut];
-      if (info.facility) {
-        for (const [id, s] of Object.entries(MAP.spaces)) {
-          if (!s.sea && game.owner[id] === game.current && (s.ipc || 0) >= 1 &&
-            !game.capturedThisTurn.has(id) && !game.unitsAt(id, u => u.type === "factory").length) ids.push(id);
-        }
-      } else {
-        for (const ic of game.eligibleICs(game.current)) {
-          if (game._placedCount(ic) >= game.mobilizeCapacity(ic)) continue;
-          if (info.sea || ut === "fighter") for (const nb of MAP.spaces[ic].conn) if (MAP.spaces[nb].sea) ids.push(nb);
-          if (!info.sea) ids.push(ic);
-        }
-      }
-      board.highlight(ids, "place");
-      mobilizeTarget = { unit: ut, spaces: new Set(ids) };
-    };
+    if (selected) mobilizeHighlight(selected);
     render();
     sidePanel(d);
   }
-  let mobilizeTarget = null;
 
   // ================= space interactions =================
   function onSpaceTap(id) {
@@ -433,11 +485,19 @@ window.UI = (function () {
     }
     if (game.phase === "mobilize" && mobilizeTarget && mobilizeTarget.spaces.has(id)) {
       try {
-        game.place(mobilizeTarget.unit, id);
+        const ut = mobilizeTarget.unit;
+        game.place(ut, id);
         board.render(); topBar();
-        const line = game.purchases.find(p => p.unit === mobilizeTarget.unit);
-        if (!line || line.qty <= 0) { mobilizeTarget = null; board.clearHighlight(); }
-        openMobilizePanel();
+        const line = game.purchases.find(p => p.unit === ut && p.qty > 0);
+        if (line) {
+          openMobilizePanel(ut); // keep the selection; capacities re-highlighted live
+          banner(`${UNIT_NAME[ut]} placed in ${MAP.spaces[id].name} — ${line.qty} left`);
+        } else {
+          // auto-advance to the next unplaced unit type
+          const next = game.purchases.find(p => p.qty > 0);
+          openMobilizePanel(next ? next.unit : null);
+          banner(next ? `${UNIT_NAME[ut]} done — now placing ${UNIT_NAME[next.unit]}` : "All units placed.");
+        }
       } catch (e) { banner(e.message); }
       return;
     }
@@ -771,30 +831,46 @@ window.UI = (function () {
     wrap.appendChild(head); wrap.appendChild(sides); wrap.appendChild(evEl); wrap.appendChild(decEl);
     const overlay = showOverlay(wrap);
 
-    const sideHtml = (units, label) => {
+    // strength table: for each unit type show count × combat value = total, plus a side total
+    const sideHtml = (units, label, attacking) => {
       const groups = {};
       for (const u of units) {
-        const k = u.type + (u.hits ? "*" : "") + (u.submerged ? "~" : "");
-        groups[k] = groups[k] || { type: u.type, n: 0, hits: u.hits, sub: u.submerged };
-        groups[k].n++;
+        const g2 = groups[u.type] = groups[u.type] || { type: u.type, n: 0, dmg: 0, sub: 0, power: u.power };
+        g2.n++; if (u.hits) g2.dmg++; if (u.submerged) g2.sub++;
       }
-      return `<div class="bs-label">${label}</div>` + Object.values(groups).map(g =>
-        `<div class="bs-unit">${chipHtml(g.type, units[0] && units[0].power)}
-         ${UNIT_NAME[g.type]}${g.hits ? " (damaged)" : ""}${g.sub ? " (submerged)" : ""} <b>×${g.n}</b></div>`).join("") || "<i>none</i>";
+      const support = (attacking && !battle.sea)
+        ? Math.min(groups.artillery ? groups.artillery.n : 0, groups.infantry ? groups.infantry.n : 0) : 0;
+      let total = 0;
+      const rows = Object.values(groups).map(g => {
+        const base = attacking ? UNITS[g.type].attack : UNITS[g.type].defense;
+        let rowTotal = base * g.n, shownVal = base;
+        if (attacking && g.type === "infantry" && support > 0) {
+          rowTotal = 2 * Math.min(support, g.n) + 1 * Math.max(0, g.n - support);
+          shownVal = "1–2";
+        }
+        total += rowTotal;
+        return `<div class="bs-unit">${chipHtml(g.type, g.power)}
+          <span class="bs-name">${UNIT_NAME[g.type]}${g.dmg ? " (damaged)" : ""}${g.sub ? " (submerged)" : ""}</span>
+          <span class="bs-math">×${g.n} @${base === 0 ? "–" : shownVal} = <b>${rowTotal}</b></span></div>`;
+      }).join("");
+      const totalRow = units.length ?
+        `<div class="bs-total">${attacking ? "ATTACK" : "DEFENSE"} TOTAL <b>${total}</b>
+         <small>each unit hits by rolling its number or less</small></div>` : "<i>none</i>";
+      return `<div class="bs-label">${label}</div>` + rows + totalRow;
     };
     const refreshSides = () => {
       const att = battle.attAlive, def = battle.defFiring;
-      attEl.innerHTML = sideHtml(att, "ATTACKER — " + POWER_NAMES[battle.attacker].toUpperCase());
-      defEl.innerHTML = sideHtml(def, "DEFENDER" + (battle.defPower ? " — " + POWER_NAMES[battle.defPower].toUpperCase() : ""));
+      attEl.innerHTML = sideHtml(att, "ATTACKER — " + POWER_NAMES[battle.attacker].toUpperCase(), true);
+      defEl.innerHTML = sideHtml(def, "DEFENDER" + (battle.defPower ? " — " + POWER_NAMES[battle.defPower].toUpperCase() : ""), false);
     };
     refreshSides();
 
     const addEvent = (e) => {
       if (e.type === "dice") {
         const diceHtml = (e.detail || [{ dice: e.dice, hits: e.hits, value: null }]).map(dd =>
-          `<span class="dice-group">${dd.value ? `<i>@${dd.value}</i>` : ""}${(dd.dice || []).map(x =>
+          `<span class="dice-group">${dd.value ? `<i>hits on ≤${dd.value}:</i>` : ""}${(dd.dice || []).map(x =>
             `<span class="die${dd.value != null && x <= dd.value ? " hit" : ""}">${x}</span>`).join("")}</span>`).join("");
-        evEl.appendChild(div("ev", `<b>${e.label}</b> ${diceHtml} <em>${e.hits} hit(s)</em>`));
+        evEl.appendChild(div("ev", `<b>${e.label}</b> ${diceHtml} <em>= ${e.hits} hit(s)</em>`));
       } else if (e.type === "info") evEl.appendChild(div("ev info", e.text));
       evEl.scrollTop = evEl.scrollHeight;
     };

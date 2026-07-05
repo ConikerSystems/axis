@@ -266,6 +266,32 @@ t("transport retreat from sea combat cancels the amphibious landing", () => {
     eq(g.owner["egypt"], "uk", "egypt still British");
   } else ok(tr.dead || b.done, "transport died before retreating — also legal");
 });
+t("amphib chain is generic: US assaults Morocco across the Atlantic", () => {
+  const g = mk({ seed: 13 }); g.turnIndex = 4; g._snapshotTurnStart(); g.phase = "combatMove"; // US
+  for (const u of g.unitsAt("sz12").concat(g.unitsAt("sz13"))) u.dead = true;
+  g.units = g.units.filter(u => !u.dead);
+  const tr = g._spawn("transport", "us", "sz12");
+  const cru = g._spawn("cruiser", "us", "sz12");
+  const i1 = g._spawn("infantry", "us", "gibraltar");
+  // gibraltar is UK-owned; US may load from a friendly territory adjacent to the zone? use own units:
+  i1.dead = true; g.units = g.units.filter(u => !u.dead);
+  // stage from a US-held space adjacent to sz12: none — so pre-load cargo as if loaded a prior turn
+  const inf = g._spawn("infantry", "us", "sz12"); inf.onTransport = tr.id;
+  const tk = g._spawn("tank", "us", "sz12"); tk.onTransport = tr.id;
+  const dd = g._spawn("submarine", "germany", "sz13"); // lurking defender (sub only → zone not hostile)
+  g.moveUnit(tr.id, "sz13", "combatMove");
+  g.offloadTransport(tr.id, "morocco"); // german territory
+  g.moveUnit(cru.id, "sz13", "combatMove");
+  g.toggleSeaAttack("sz13"); // choose to fight the sub too
+  g.endCombatMove();
+  const order = g.battles.map(b => b.space);
+  ok(order.includes("morocco"), "landing battle exists: " + order.join(","));
+  ok(order.indexOf("sz13") < order.indexOf("morocco"), "sea fight first");
+  const b1 = autoBattle(g, "sz13"); ok(b1.done, "sea battle done");
+  g.battles.find(b => b.space === "sz13").resolved = true;
+  const b2 = autoBattle(g, "morocco"); ok(b2.done, "landing done");
+  ok(["resolved", "retreat"].includes(b2.result.type), "landing resolved cleanly");
+});
 t("fighters still aboard a carrier are cargo, not attackers", () => {
   const g = mk({ seed: 4 }); g.turnIndex = 1; g.phase = "combatMove";
   for (const u of g.unitsAt("sz15").concat(g.unitsAt("sz17"))) u.dead = true;

@@ -79,11 +79,11 @@ window.Board = (function () {
       if (s.sea) {
         el("text", { x: c[0], y: c[1], class: "sz-label" }, gLabels).textContent = id.replace("sz", "");
       } else if (!s.impassable) {
-        const t = el("text", { x: c[0], y: c[1] - 14, class: "t-label" }, gLabels);
+        const t = el("text", { x: c[0], y: c[1] - 20, class: "t-label" }, gLabels);
         t.textContent = s.name;
         if (s.ipc) {
           const b = el("g", { class: "ipc-badge" }, gLabels);
-          el("circle", { cx: c[0], cy: c[1] + 4, r: 11 }, b);
+          el("circle", { cx: c[0], cy: c[1] + 2, r: 14 }, b);
           el("text", { x: c[0], y: c[1] + 8, class: "ipc-text" }, b).textContent = s.ipc;
         }
       } else {
@@ -250,14 +250,14 @@ window.Board = (function () {
         const c = MAP.centers[id]; if (!c) continue;
         if (s.vc) {
           const own = game.owner[id];
-          const g2 = el("g", { transform: `translate(${c[0] - 26},${c[1] - 30})`, class: "vc" }, gMarks);
+          const g2 = el("g", { transform: `translate(${c[0] - 38},${c[1] - 42}) scale(1.5)`, class: "vc" }, gMarks);
           el("path", { d: "M8 0l2.2 5.4L16 6l-4.3 3.9 1.4 6L8 12.8 2.9 16l1.4-6L0 6l5.8-.6z",
             fill: own && (own === "germany" || own === "japan") ? "#c33" : "#fff",
             stroke: "#333", "stroke-width": 1 }, g2);
         }
         const ics = game.unitsAt ? game.unitsAt(id, u => u.type === "factory") : [];
         if (ics.length) {
-          const g2 = el("g", { transform: `translate(${c[0] + 14},${c[1] - 38})`, class: "ic" }, gMarks);
+          const g2 = el("g", { transform: `translate(${c[0] + 18},${c[1] - 52}) scale(1.4)`, class: "ic" }, gMarks);
           el("path", { d: "M0 18v-8l6 4v-4l6 4v-4l6 4v-6h4v18H0z", fill: "#3a3f45", stroke: "#111", "stroke-width": 1 }, g2);
           const dmg = game.icDamage[id] || 0;
           if (dmg) {
@@ -291,32 +291,33 @@ window.Board = (function () {
         keys.forEach((k, i) => {
           const gr = groups[k];
           const col = i % perRow, row = Math.floor(i / perRow);
-          const x = c[0] + (col - (Math.min(perRow, keys.length) - 1) / 2) * 42;
-          const y = c[1] + 26 + row * 40;
+          const x = c[0] + (col - (Math.min(perRow, keys.length) - 1) / 2) * 54;
+          const y = c[1] + 32 + row * 52;
           const isCur = game.players && game.current === gr.power;
           const node = el("g", {
             class: "stack" + (isCur ? " draggable" : ""),
             transform: `translate(${x},${y})`,
             "data-space": id, "data-power": gr.power, "data-type": gr.type, "data-count": gr.n,
           }, gUnits);
-          el("circle", { r: 17, fill: POWER_COLOR[gr.power], stroke: "#0c0e12", "stroke-width": 1.5 }, node);
-          el("circle", { r: 16, fill: "url(#chipDome)", "pointer-events": "none" }, node); // plastic sheen
+          el("circle", { r: 23, fill: POWER_COLOR[gr.power], stroke: "#0c0e12", "stroke-width": 1.8 }, node);
+          el("circle", { r: 21.5, fill: "url(#chipDome)", "pointer-events": "none" }, node); // plastic sheen
           const markup = (window.UNIT_ICONS && UNIT_ICONS[gr.type]) || "";
           if (markup) {
-            // sculpted relief: dark offset shadow layer under a light top layer
+            // sculpted relief: dark offset shadow layer under a light top layer, scaled up
             const sh = el("g", { class: "stack-icon", fill: "#0a0b0e", color: "#0a0b0e",
-              opacity: 0.32, transform: "translate(0.7,1.1)", "pointer-events": "none" }, node);
+              opacity: 0.32, transform: "translate(1,1.5) scale(1.5)", "pointer-events": "none" }, node);
             sh.innerHTML = markup;
-            const ic = el("g", { class: "stack-icon", fill: "#f6f1e6", color: "#f6f1e6", "pointer-events": "none" }, node);
+            const ic = el("g", { class: "stack-icon", fill: "#f6f1e6", color: "#f6f1e6",
+              transform: "scale(1.5)", "pointer-events": "none" }, node);
             ic.innerHTML = markup;
           } else el("text", { y: 5, class: "stack-glyph" }, node).textContent = GLYPH[gr.type];
           if (gr.n > 1) {
-            el("circle", { cx: 13, cy: 13, r: 9, class: "count-badge" }, node);
-            el("text", { x: 13, y: 17, class: "count-text" }, node).textContent = gr.n;
+            el("circle", { cx: 18, cy: 17, r: 12.5, class: "count-badge" }, node);
+            el("text", { x: 18, y: 22.5, class: "count-text" }, node).textContent = gr.n;
           }
           if (gr.cargo) {
-            el("circle", { cx: -13, cy: -12, r: 8, class: "cargo-badge" }, node);
-            el("text", { x: -13, y: -8, class: "cargo-text" }, node).textContent = gr.cargo;
+            el("circle", { cx: -18, cy: -16, r: 10.5, class: "cargo-badge" }, node);
+            el("text", { x: -18, y: -11.5, class: "cargo-text" }, node).textContent = gr.cargo;
           }
         });
       }
