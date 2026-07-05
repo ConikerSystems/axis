@@ -66,7 +66,12 @@ window.Board = (function () {
     let game = null;
 
     // --- build static geometry ---
-    for (const [id, polys] of Object.entries(MAP.geometry)) {
+    // Sea zones first, land second: sea-zone polygons include their islands'
+    // area, so land must always paint on top (fixes islands like Borneo being
+    // covered by the surrounding sea zone).
+    const ordered = Object.entries(MAP.geometry)
+      .sort((a, b) => (MAP.spaces[a[0]].sea ? 0 : 1) - (MAP.spaces[b[0]].sea ? 0 : 1));
+    for (const [id, polys] of ordered) {
       const s = MAP.spaces[id];
       const d = polys.map(p => "M" + p.map(pt => pt[0] + " " + pt[1]).join("L") + "Z").join("");
       const path = el("path", { d, "data-id": id, class: "space " + (s.sea ? "sea" : "land") }, gSpaces);
