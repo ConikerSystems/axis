@@ -179,6 +179,7 @@ window.UI = (function () {
     board.setGame(game);
     board.clearHighlight();
     moveSelect = null;
+    if (game.players[game.current].type === "human") aiFeedClear();
     sidePanel(null);
     autosave();
     if (game.winner) return victoryScreen();
@@ -862,34 +863,109 @@ window.UI = (function () {
   }
 
   // ================= AI turn =================
+  // Fully automatic: the computer plays every phase itself — no confirmations,
+  // even when it attacks a human-defended space (the AI assigns the defender's
+  // casualties sensibly). A live feed shows what is happening, fast.
+  const AI_PACE = 340;
+
+  function aiFeed(html) {
+    const feed = $("#ai-feed");
+    if (!feed) return;
+    const e = div("ai-ev", html);
+    feed.appendChild(e);
+    while (feed.children.length > 6) feed.removeChild(feed.firstChild);
+    requestAnimationFrame(() => e.classList.add("show"));
+  }
+  function aiFeedClear() { const f = $("#ai-feed"); if (f) f.innerHTML = ""; }
+
+  const NAMES_SHORT = { infantry: "Inf", artillery: "Art", tank: "Tank", aaa: "AA", factory: "IC",
+    fighter: "Ftr", bomber: "Bmr", submarine: "Sub", transport: "Trn", destroyer: "Dst",
+    cruiser: "Cru", carrier: "Car", battleship: "BB" };
+  const lossList = (units) => {
+    const m = {};
+    for (const u of units) if (u.dead) m[u.type] = (m[u.type] || 0) + 1;
+    const s = Object.entries(m).map(([t, n]) => n + " " + NAMES_SHORT[t]).join(", ");
+    return s || "none";
+  };
+
+  function runAIBattle(bRec) {
+    const battle = new Combat.Battle(game, bRec.space, { sbr: bRec.sbr });
+    const att0 = battle.att.slice(), def0 = battle.def.slice();
+    let d, guard = 0;
+    while ((d = battle.pending()) && guard++ < 400) battle.decide(AI.answer(game, battle, d));
+    bRec.resolved = true;
+    const s = MAP.spaces[bRec.space];
+    const r = battle.result || {};
+    if (bRec.sbr) return `✈ Bombing raid on <b>${s.name}</b> — ${game.icDamage[bRec.space] || 0} total damage`;
+    const outcome = r.type === "retreat" ? "attacker retreated" :
+      r.captured ? `<b>${s.name} captured!</b>` :
+      r.attackerWon ? "attacker won" : "defenders held";
+    return `⚔ <b>${s.name}</b>: ${outcome} · atk lost ${lossList(att0)} · def lost ${lossList(def0)}`;
+  }
+
+  // pause that never stalls the turn: skipped when the tab is hidden (browsers
+  // throttle background timers) and capped as a safety net.
+  const aiPause = (ms) => (typeof document !== "undefined" && document.hidden)
+    ? Promise.resolve() : new Promise(r => setTimeout(r, Math.min(ms, 1200)));
+
   async function runAITurn() {
-    const p = game.current, pl = game.players[p];
-    banner(`<b>${POWER_NAMES[p].toUpperCase()}</b> (Computer) is taking its turn…`, true);
-    await pause(500);
-    AI.purchase(game); topBar();
-    AI.combatMove(game); board.render();
-    await pause(400);
-    game.resolveUnopposed(); board.render();
-    for (const b of game.pendingBattles()) {
-      const defHuman = game.unitsAt(b.space, u => !game.isFriendly(p, u.power))
-        .some(u => game.players[u.power] && game.players[u.power].type === "human");
-      if (defHuman) { banner(null); await runBattle(b); banner(`<b>${POWER_NAMES[p].toUpperCase()}</b> continues…`, true); }
-      else {
-        const battle = new Combat.Battle(game, b.space, { sbr: b.sbr });
-        let d, guard = 0;
-        while ((d = battle.pending()) && guard++ < 400) battle.decide(AI.answer(game, battle, d));
-        b.resolved = true;
-        board.render();
-        await pause(120);
+    const p = game.current;
+    banner(`<b>${POWER_NAMES[p].toUpperCase()}</b> (Computer) is playing…`, true);
+    aiFeedClear();
+    try {
+      AI.purchase(game); topBar();
+      const bought = game.purchases.map(x => x.qty + " " + NAMES_SHORT[x.unit]).join(", ");
+      aiFeed(`💰 <b>${POWER_NAMES[p]}</b> purchases: ${bought || "nothing"}`);
+      await aiPause(AI_PACE);
+
+      AI.combatMove(game); board.render();
+      game.resolveUnopposed(); board.render(); topBar();
+      const captured = [...game.capturedThisTurn].map(id => MAP.spaces[id].name);
+      if (captured.length) aiFeed(`🚩 Captured unopposed: ${captured.join(", ")}`);
+      const battles = game.pendingBattles();
+      if (battles.length) { aiFeed(`⚔ ${battles.length} battle(s) declared`); await aiPause(AI_PACE); }
+
+      for (const b of battles) {
+        try {
+          board.focusSpace(b.space);
+          await aiPause(220);
+          const summary = runAIBattle(b);
+          board.render(); topBar();
+          aiFeed(summary);
+        } catch (e) {
+          console.error("AI battle error at " + b.space, e);
+          b.resolved = true; // never leave the turn stuck on one battle
+          aiFeed(`⚔ ${MAP.spaces[b.space].name}: resolved`);
+        }
+        await aiPause(AI_PACE + 160);
       }
+      // failsafe: nothing may remain unresolved
+      for (const b of game.pendingBattles()) { try { runAIBattle(b); } catch (e) { b.resolved = true; } }
+      game.endCombat();
+
+      AI.noncombat(game); board.render();
+      AI.mobilize(game); board.render();
+      game.collectIncome(); topBar(); autosave();
+      aiFeed(`🏭 Reinforced & mobilized · 💰 income collected (${game.ipc[p]} IPC)`);
+      await aiPause(AI_PACE);
+    } catch (e) {
+      // absolute failsafe: report, then force the turn to a clean end so play continues
+      console.error("AI turn error (" + p + ", " + game.phase + ")", e);
+      aiFeed(`⚠ Computer turn error — recovering`);
+      try {
+        for (const b of game.pendingBattles()) b.resolved = true;
+        if (game.phase === "combatMove") game.endCombatMove();
+        if (game.phase === "combat") game.endCombat();
+        if (game.phase === "noncombatMove") game.endNoncombatMove();
+        if (game.phase === "mobilize") game.endMobilize();
+        if (game.phase === "income" || game.phase === "purchase") { /* fallthrough below */ }
+        if (game.phase !== "purchase") game.collectIncome();
+        else game.endPurchase(), game.endCombatMove(), game.endCombat(), game.endNoncombatMove(), game.endMobilize(), game.collectIncome();
+      } catch (e2) { console.error("AI recovery failed", e2); }
+      topBar(); board.render(); autosave();
     }
-    game.endCombat();
-    AI.noncombat(game); board.render();
-    AI.mobilize(game); board.render();
-    game.collectIncome();
     banner(null);
-    topBar(); autosave();
-    if (game.winner) return victoryScreen();
+    if (game.winner) { aiFeedClear(); return victoryScreen(); }
     nextPower();
   }
 

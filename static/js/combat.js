@@ -36,10 +36,13 @@
       this.events = [];
       this.attacker = game.current;
 
-      this.amphibUnits = game.units.filter(u => !u.dead && u.amphibTarget === spaceId);
+      // amphibious cargo only lands if its transport is still alive in a declared staging zone
+      const assault = game.assaults[spaceId];
+      this.amphibUnits = game.units.filter(u => !u.dead && u.amphibTarget === spaceId &&
+        assault && assault.from[u.space]);
+      // fighters still aboard a carrier are cargo — they fight only if they launched (moved off)
       this.att = game.unitsAt(spaceId, u => u.power === this.attacker &&
-        !UNITS[u.type].facility && !u.onTransport && !u.sbrDone &&
-        (this.sea ? true : !u.onCarrier));
+        !UNITS[u.type].facility && !u.onTransport && !u.sbrDone && !u.onCarrier);
       if (!this.sea && this.amphibUnits.length) {
         for (const u of this.amphibUnits) { delete u.onTransport; u.space = spaceId; }
         this.att = this.att.concat(this.amphibUnits.filter(u => !this.att.includes(u)));
@@ -422,7 +425,8 @@
         delete u.submerged;
         u.space = to;
         if (UNITS[u.type].carrier) for (const f of g.carrierFighters(u)) f.space = to;
-        if (UNITS[u.type].transport) for (const c of g.cargoOf(u)) c.space = to;
+        // a transport that retreats keeps its cargo but the amphibious assault is off
+        if (UNITS[u.type].transport) for (const c of g.cargoOf(u)) { c.space = to; delete c.amphibTarget; }
       }
       for (const u of this.def) { delete u.submerged; delete u.doomedFlag; }
       this._ev("info", { text: `Attacker retreated to ${g.space(to).name}` });

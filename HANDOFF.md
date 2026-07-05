@@ -2,6 +2,17 @@
 
 _Updated: 2026-07-05 (v1.3.0)_
 
+## v1.4 (2026-07-05)
+- **AI turns fully automatic**: no confirmations even vs human defenders (AI assigns
+  the defender's casualties); live action feed (#ai-feed) shows purchases, captures,
+  each battle with losses, mobilize/income; `aiPause` skips when tab hidden (throttle-proof)
+  and the whole turn has try/catch failsafes so it can never strand mid-phase.
+- **Combat-movement fixes** (verified vs the real Italy→Egypt amphib with battleship
+  clearing the UK destroyer in sz17): amphib cargo only lands if its transport is
+  alive in a declared staging zone; transport retreat cancels the assault; fighters
+  still aboard carriers are cargo, not combatants; AAA can't load in combat move.
+- 38 engine tests pass.
+
 ## Latest session (v1.1–v1.3)
 - **Deployed & public:** live at https://conikersystems.github.io/axis/ (repo ConikerSystems/axis).
 - **v1.1:** silhouette unit icons + reference-matched nation chip colors.

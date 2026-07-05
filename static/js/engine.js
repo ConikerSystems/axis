@@ -309,6 +309,7 @@
       if (!info.land || landUnit.power !== this.current) return false;
       if (!this.isFriendly(transport.power, landUnit.power)) return false;
       if (landUnit.moved > 0 || landUnit.onTransport) return false;
+      if (info.aa && this.phase === "combatMove") return false; // AAA moves only in noncombat
       const tz = transport.space;
       if (this.isHostileSpace(this.current, tz)) return false;
       if (!this.space(landUnit.space).conn.includes(tz)) return false;

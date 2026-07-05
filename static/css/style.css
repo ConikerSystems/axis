@@ -129,6 +129,16 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
 #banner.show { transform: translate(-50%, 0); }
 #banner b { color: var(--gold); }
 
+/* live feed of computer actions during AI turns */
+#ai-feed { position: absolute; left: 10px; top: 56px; z-index: 24; display: flex;
+  flex-direction: column; gap: 6px; max-width: min(440px, 62vw); pointer-events: none; }
+.ai-ev { background: rgba(16, 18, 22, .92); border: 1px solid var(--line);
+  border-left: 3px solid var(--gold); border-radius: 6px; padding: 7px 12px;
+  font-size: .88rem; color: var(--text); opacity: 0; transform: translateX(-14px);
+  transition: opacity .18s, transform .18s; }
+.ai-ev.show { opacity: 1; transform: none; }
+.ai-ev b { color: var(--gold); }
+
 #side-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 340px; max-width: 88vw;
   background: rgba(26, 28, 33, .96); border-left: 2px solid #000; transform: translateX(105%);
   transition: transform .22s; z-index: 20; overflow-y: auto;

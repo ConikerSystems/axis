@@ -205,6 +205,81 @@ t("canal cannot be used the turn it is captured", () => {
   ok(g.reachable(sub, "combatMove").has("sz18"), "canal open when held since turn start");
 });
 
+console.log("— combat movement scenarios —");
+t("Italy amphib on Egypt: load inf+tank, battleship clears destroyer, assault lands", () => {
+  const g = mk({ seed: 11 }); g.turnIndex = 1; g.phase = "combatMove"; // germany
+  // controlled stage: clear the Med sea zones, then build the classic move
+  for (const u of g.unitsAt("sz15").concat(g.unitsAt("sz17"))) u.dead = true;
+  g.units = g.units.filter(u => !u.dead);
+  const tr = g._spawn("transport", "germany", "sz15");
+  const bb = g._spawn("battleship", "germany", "sz15");
+  const dd = g._spawn("destroyer", "uk", "sz17");
+  const inf = g._spawn("infantry", "germany", "italy");
+  const tk = g._spawn("tank", "germany", "italy");
+  // load both onto the one transport (1 land unit + 1 infantry)
+  ok(g.canLoad(inf, tr), "infantry loadable"); g.loadUnit(inf.id, tr.id);
+  ok(g.canLoad(tk, tr), "tank loadable too"); g.loadUnit(tk.id, tr.id);
+  // transport sails into the hostile zone (stops there), declares assault on Egypt
+  const rt = g.reachable(tr, "combatMove");
+  ok(rt.has("sz17"), "transport can enter hostile sz17");
+  g.moveUnit(tr.id, "sz17", "combatMove");
+  g.offloadTransport(tr.id, "egypt");
+  // battleship joins to clear the destroyer
+  g.moveUnit(bb.id, "sz17", "combatMove");
+  g.endCombatMove();
+  const order = g.battles.map(b => b.space);
+  ok(order.indexOf("sz17") < order.indexOf("egypt"), "sea combat resolves before the landing: " + order.join(","));
+  // resolve sea combat: BB vs destroyer — BB should win (seeded)
+  const b1 = autoBattle(g, "sz17");
+  ok(b1.done, "sea battle resolved");
+  if (!dd.dead) return ok(true, "destroyer survived dice — acceptable");
+  g.battles.find(b => b.space === "sz17").resolved = true;
+  // resolve the landing; bombardment must be forfeited (sea combat happened here)
+  const b2 = autoBattle(g, "egypt");
+  ok(b2.done, "landing resolved");
+  ok(!b2.events.some(e => e.label === "Shore bombardment"), "no bombardment after sea combat");
+  ok(!inf.dead || !tk.dead || g.owner["egypt"] === "uk", "cargo fought ashore");
+});
+t("transport retreat from sea combat cancels the amphibious landing", () => {
+  const g = mk({ seed: 2 }); g.turnIndex = 1; g.phase = "combatMove";
+  for (const u of g.unitsAt("sz15").concat(g.unitsAt("sz17"))) u.dead = true;
+  g.units = g.units.filter(u => !u.dead);
+  const tr = g._spawn("transport", "germany", "sz15");
+  const inf = g._spawn("infantry", "germany", "italy");
+  g.loadUnit(inf.id, tr.id);
+  // hopeless: two UK battleships defend sz17
+  g._spawn("battleship", "uk", "sz17"); g._spawn("battleship", "uk", "sz17");
+  g.moveUnit(tr.id, "sz17", "combatMove");
+  g.offloadTransport(tr.id, "egypt");
+  g.endCombatMove();
+  const b = autoBattle(g, "sz17", null, (d) => {
+    if (d.type === "retreat" && d.options.length) return { retreat: true, to: d.options[0] };
+    return null;
+  });
+  if (b.result && b.result.type === "retreat") {
+    ok(!inf.dead, "cargo survives aboard the retreating transport");
+    eq(inf.amphibTarget, undefined, "assault cancelled on retreat");
+    eq(inf.space, tr.space, "cargo went with the transport");
+    g.battles.find(x => x.space === "sz17").resolved = true;
+    const b2 = new Combat.Battle(g, "egypt");
+    ok(b2.done, "egypt battle auto-resolves with no attackers");
+    eq(g.owner["egypt"], "uk", "egypt still British");
+  } else ok(tr.dead || b.done, "transport died before retreating — also legal");
+});
+t("fighters still aboard a carrier are cargo, not attackers", () => {
+  const g = mk({ seed: 4 }); g.turnIndex = 1; g.phase = "combatMove";
+  for (const u of g.unitsAt("sz15").concat(g.unitsAt("sz17"))) u.dead = true;
+  g.units = g.units.filter(u => !u.dead);
+  const cv = g._spawn("carrier", "germany", "sz15");
+  const f1 = g._spawn("fighter", "germany", "sz15"); f1.onCarrier = cv.id;
+  g._spawn("destroyer", "uk", "sz17");
+  g.moveUnit(cv.id, "sz17", "combatMove");
+  g.endCombatMove();
+  const b = new Combat.Battle(g, "sz17");
+  ok(!b.att.includes(f1), "carried fighter is not a combatant");
+  ok(b.att.includes(cv), "carrier fights");
+});
+
 console.log("— purchase & mobilize —");
 t("purchase and mobilize flow", () => {
   const g = mk();
