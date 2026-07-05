@@ -152,11 +152,13 @@ window.UI = (function () {
         online.sha = res.sha;
       } catch (e) { online = null; banner("Could not create game: " + e.message); return; }
       banner(null);
-      await openModal("GAME CREATED — " + id, div("modal-note",
+      const choice = await openModal("GAME CREATED — " + id, div("modal-note",
         `Your Game ID is <b style="font-size:1.6rem;color:var(--gold)">${id}</b><br><br>
-         Text it to <b>${p2name}</b>. On their device they tap <b>🌐 JOIN ONLINE GAME</b>, enter the
-         shared token once, then this ID. Turns sync automatically whenever either of you plays.`),
-        [{ label: "START PLAYING", cls: "primary" }]);
+         Tap <b>📲 INVITE ${p2name.toUpperCase()}</b> to text them a link — one tap on it and
+         they're in the game (no setup, no token, no typing except their name).`),
+        [{ label: "📲 INVITE " + p2name.toUpperCase(), cls: "primary", value: "invite" },
+         { label: "START PLAYING", cls: "" }]);
+      if (choice === "invite") await shareInvite();
       enterGame();
     } else enterGame();
   }
@@ -175,7 +177,7 @@ window.UI = (function () {
     board.setGame(game);
     if (location.hostname === "localhost" || location.hostname === "127.0.0.1")
       window.__ui = { get game() { return game; }, onDrop, onDragStart, onStackTap, openMovePicker,
-        board: () => board, get online() { return online; } };
+        board: () => board, get online() { return online; }, handleInvite, inviteLink };
     (afterShow || startPhase)();
   }
 
@@ -1170,13 +1172,20 @@ window.UI = (function () {
       wrap.appendChild(div("modal-title", "ONLINE SETUP"));
       const body = div("modal-body");
       body.innerHTML = `
-        <div class="modal-note">Online games sync turns through the private GitHub repo
-          <b>${Online.repo()}</b>. Both players enter the <b>same shared token</b> once
-          (the game owner creates it on GitHub: Settings → Developer settings →
-          Fine-grained tokens → access to only that repo, Contents read &amp; write).</div>
+        <div class="modal-note"><b>Invited by someone?</b> Just tap the link they texted you instead — no setup needed.<br><br>
+          <b>Hosting games?</b> One-time setup: create an access key on GitHub and paste it below.
+          It only unlocks the games repo (<b>${Online.repo()}</b>), nothing else.</div>
+        <div class="btn" id="ol-helper" style="display:block;margin:4px auto 10px;max-width:320px;">📋 COPY GITHUB TOKEN-PAGE LINK</div>
+        <div class="modal-note" style="font-size:.82rem">Open that link in Safari → name it <b>axis</b> → Only select repositories →
+          <b>axis-games</b> → Permissions → Contents: <b>Read and write</b> → Generate → copy → paste here.</div>
         <input id="ol-name" class="ol-input" type="text" maxlength="14" placeholder="YOUR NAME (e.g. JOE)">
-        <input id="ol-token" class="ol-input" type="password" placeholder="SHARED GITHUB TOKEN (github_pat_…)">
+        <input id="ol-token" class="ol-input" type="password" placeholder="GITHUB TOKEN (github_pat_…)">
         <div class="modal-note" id="ol-status"></div>`;
+      body.querySelector("#ol-helper").onclick = async () => {
+        const url = "https://github.com/settings/personal-access-tokens/new";
+        try { await navigator.clipboard.writeText(url); body.querySelector("#ol-status").textContent = "Link copied — open it in Safari."; }
+        catch (e) { prompt("Open this in Safari:", url); }
+      };
       wrap.appendChild(body);
       const btns = div("modal-btns");
       const cancel = div("btn", "CANCEL"), save = div("btn primary", "VERIFY & SAVE");
@@ -1212,12 +1221,33 @@ window.UI = (function () {
     show("#screen-new");
   }
 
+  // join a game by id (shared by the JOIN dialog and invite links)
+  async function joinOnlineGame(id, statusCb) {
+    const st = statusCb || (() => {});
+    st("Looking up " + id + "…");
+    const g = await Online.getGame(id);
+    if (!g) { st("✗ No game found with that ID."); return false; }
+    const mySeat = Online.seat(id) || "p2"; // creator device remembers p1; everyone else is player 2
+    Online.setSeat(id, mySeat);
+    online = { id, sha: g.sha, mySeat, seatNames: g.data.seatNames };
+    onlineOutbox = [];
+    game = Game.restore(g.data.snap, MAP);
+    game.title = g.data.title;
+    enterGame(() => {
+      if (g.data.winner) victoryScreen();
+      else if (g.data.turnSeat === online.mySeat) onRemote(g, true);
+      else enterWaiting();
+    });
+    return true;
+  }
+
   async function openOnlineJoin() {
     if (!(await ensureOnlineSetup())) return;
     const wrap = div("modal");
     wrap.appendChild(div("modal-title", "JOIN ONLINE GAME"));
     const body = div("modal-body");
-    body.innerHTML = `<div class="modal-note">Enter the Game ID you were sent (e.g. EAGLE-4821).</div>
+    body.innerHTML = `<div class="modal-note">Easiest: tap the <b>invite link</b> the other player texted you — it does
+        everything. Or enter the Game ID here (e.g. EAGLE-4821).</div>
       <input id="ol-gameid" class="ol-input" type="text" placeholder="GAME ID" autocapitalize="characters">
       <div class="modal-note" id="ol-status"></div>`;
     wrap.appendChild(body);
@@ -1230,24 +1260,64 @@ window.UI = (function () {
       const id = body.querySelector("#ol-gameid").value.trim().toUpperCase();
       const st = body.querySelector("#ol-status");
       if (!id) { st.textContent = "Enter the Game ID."; return; }
-      st.textContent = "Looking up " + id + "…";
       try {
-        const g = await Online.getGame(id);
-        if (!g) { st.textContent = "✗ No game found with that ID."; return; }
-        ov.remove();
-        const mySeat = Online.seat(id) || "p2"; // creator device remembers p1; everyone else is player 2
-        Online.setSeat(id, mySeat);
-        online = { id, sha: g.sha, mySeat, seatNames: g.data.seatNames };
-        onlineOutbox = [];
-        game = Game.restore(g.data.snap, MAP);
-        game.title = g.data.title;
-        enterGame(() => {
-          if (g.data.winner) victoryScreen();
-          else if (g.data.turnSeat === online.mySeat) onRemote(g, true);
-          else enterWaiting();
-        });
+        if (await joinOnlineGame(id, (t) => st.textContent = t)) ov.remove();
       } catch (e) { st.textContent = "✗ " + e.message; }
     };
+  }
+
+  // ---- invite links: everything player 2 needs, in one tap ----
+  // The token travels in the URL fragment (#…), which browsers never send to any
+  // server — it exists only in the message and on the two devices.
+  function inviteLink() {
+    const cfg = Online.config() || {};
+    let link = location.origin + location.pathname + "#join=" + online.id +
+      "&k=" + encodeURIComponent(cfg.token || "");
+    if (cfg.repo && cfg.repo !== "ConikerSystems/axis-games") link += "&r=" + encodeURIComponent(cfg.repo);
+    return link;
+  }
+  async function shareInvite() {
+    const who = (online.seatNames && online.seatNames.p2) || "Player 2";
+    const link = inviteLink();
+    const text = `Join our Axis 1942 game (${online.id})! Tap the link, type your name, and play:`;
+    try {
+      if (navigator.share) { await navigator.share({ title: "Axis 1942 — " + online.id, text, url: link }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+    try { await navigator.clipboard.writeText(text + "\n" + link); banner("Invite link copied — paste it into a text to " + who + "."); }
+    catch (e) { prompt("Copy this invite link:", link); }
+  }
+  // arriving via an invite link: save the key, ask only for a name, jump into the game
+  async function handleInvite(id, key, repoOverride) {
+    const cfg = Online.config() || {};
+    if (key) Online.saveConfig({ name: cfg.name || "", token: key,
+      repo: repoOverride || cfg.repo || Online.repo() });
+    if (!(Online.config() || {}).name) {
+      await new Promise((resolve) => {
+        const wrap = div("modal");
+        wrap.appendChild(div("modal-title", "YOU'RE INVITED — " + id));
+        const body = div("modal-body");
+        body.innerHTML = `<div class="modal-note">You've been invited to an Axis 1942 game. What's your name?</div>
+          <input id="ol-name2" class="ol-input" type="text" maxlength="14" placeholder="YOUR NAME">`;
+        wrap.appendChild(body);
+        const btns = div("modal-btns");
+        const go = div("btn primary", "LET'S PLAY");
+        btns.appendChild(go); wrap.appendChild(btns);
+        const ov = showOverlay(wrap);
+        go.onclick = () => {
+          const name = body.querySelector("#ol-name2").value.trim();
+          if (!name) return;
+          const c = Online.config() || {};
+          Online.saveConfig({ name, token: c.token, repo: c.repo || Online.repo() });
+          ov.remove(); resolve();
+        };
+      });
+    }
+    try {
+      banner("Joining " + id + "…", true);
+      const ok2 = await joinOnlineGame(id, () => {});
+      if (!ok2) banner("Game " + id + " was not found — ask for a fresh invite.");
+      else banner(null);
+    } catch (e) { banner("Could not join: " + e.message); }
   }
 
   // push the state and park this device until the other player moves
@@ -1285,6 +1355,10 @@ window.UI = (function () {
       } catch (e) { banner(e.message); }
     };
     d.appendChild(btn);
+    const inv = div("btn", "📲 RESEND INVITE LINK");
+    inv.style.cssText = "display:block;margin:0 auto 8px;max-width:220px;";
+    inv.onclick = shareInvite;
+    d.appendChild(inv);
     d.appendChild(div("panel-cta", "You can close the app — resume from CONTINUE any time."));
     sidePanel(d);
     banner(`Waiting for <b>${who}</b>…`, true);
@@ -1375,6 +1449,15 @@ window.UI = (function () {
   function init() {
     initNewGameScreen();
     refreshHome();
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1")
+      window.__uiInit = { handleInvite, inviteLink };
+    // invite link? (#join=ID&k=TOKEN) — scrub it from the URL, then auto-join
+    if (location.hash.startsWith("#join=")) {
+      const h = new URLSearchParams(location.hash.slice(1));
+      const id = (h.get("join") || "").toUpperCase(), key = h.get("k"), r = h.get("r");
+      history.replaceState(null, "", location.pathname + location.search);
+      if (id) setTimeout(() => handleInvite(id, key, r), 50);
+    }
     $("#btn-new").onclick = () => {
       territoryOverrides = {}; online = null; onlineCreateMode = false;
       initNewGameScreen(); show("#screen-new");

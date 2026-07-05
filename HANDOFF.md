@@ -2,6 +2,12 @@
 
 _Updated: 2026-07-05 (v1.3.0)_
 
+## v1.7 (2026-07-05) — one-tap invites
+- Player 2 needs ZERO setup: the creator taps 📲 INVITE and texts a link
+  (…/axis/#join=<ID>&k=<token> — the fragment never reaches any server). Tapping it
+  asks only for a name, then drops them into the game/turn report. RESEND INVITE on
+  the waiting screen; setup modal now has a copy-token-page helper for the host.
+
 ## v1.6 (2026-07-05) — ONLINE TWO-PLAYER ("Play by GitHub")
 - **Async multiplayer through GitHub**: game snapshots sync via the private repo
   `ConikerSystems/axis-games` (games/<id>.json, every turn = a commit). No server.
