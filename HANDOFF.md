@@ -1,6 +1,18 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-07-02_
+_Updated: 2026-07-05 (v1.3.0)_
+
+## Latest session (v1.1–v1.3)
+- **Deployed & public:** live at https://conikersystems.github.io/axis/ (repo ConikerSystems/axis).
+- **v1.1:** silhouette unit icons + reference-matched nation chip colors.
+- **v1.2:** tap-to-select movement (tap a piece → pick exact units → tap highlighted destination); drag still works.
+- **v1.3:** sculpted piece art (detailed miniatures with relief shadow + plastic dome sheen) and a
+  full 3-agent rules audit with fixes: repair spending counts against buy budget; capital-occupied
+  power can't purchase; SBR resolves before other combat; canal control read at turn start;
+  non-tank land units must END combat moves in hostile spaces; sea retreats need turn-start-friendly
+  zones. 35 engine tests pass. Known accepted approximations: bombardment ship cap is per-battle
+  (not per-source-zone); air landing-range enforced at UI/AI layer, not in moveUnit itself;
+  allied-carrier landing uses isFriendly (broader than owner-only).
 
 ## Where things stand
 A **complete, playable** digital edition of Axis & Allies 1942 Second Edition as an
