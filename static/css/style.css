@@ -207,6 +207,11 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
 .te-row select { background: #101215; color: var(--text); border: 1px solid var(--line);
   font: inherit; padding: 5px; border-radius: 4px; }
 
+/* ---------- online play ---------- */
+.ol-input { display: block; width: 100%; margin: 8px 0; background: #101215;
+  border: 1px solid var(--gold-dim); color: var(--gold); font: inherit; font-weight: 700;
+  letter-spacing: .05em; padding: 12px; border-radius: 5px; }
+
 /* ---------- country summary ---------- */
 .summary-table { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .sum-row { display: grid; grid-template-columns: 2.1fr 1fr 1.2fr 1.1fr 0.9fr 0.9fr; gap: 4px;

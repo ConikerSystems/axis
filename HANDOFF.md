@@ -2,6 +2,24 @@
 
 _Updated: 2026-07-05 (v1.3.0)_
 
+## v1.6 (2026-07-05) — ONLINE TWO-PLAYER ("Play by GitHub")
+- **Async multiplayer through GitHub**: game snapshots sync via the private repo
+  `ConikerSystems/axis-games` (games/<id>.json, every turn = a commit). No server.
+- `static/js/online.js`: contents-API get/put with SHA compare-and-swap, unicode-safe
+  base64, polling (15s + visibilitychange). Home buttons 🌐 CREATE / JOIN ONLINE GAME;
+  one-time setup modal (shared fine-grained PAT + player name, stored in localStorage).
+- Create flow assigns powers to Player 1 (creator) / Player 2 / Computer; Game ID
+  (e.g. WOLF-7086) is texted to the other player. Turn "baton": a device plays its own
+  powers + any AI powers, then pushes when the other seat's human power comes up and
+  parks on a WAITING screen (poll + CHECK NOW). Receiver gets "IT'S YOUR TURN" with a
+  while-you-were-away battle report. Remote defender casualties auto-resolved (AI rules).
+  CONTINUE re-syncs online games from GitHub (source of truth). Conflict-safe (CAS).
+- **Joe must create the shared token** (fine-grained PAT, only axis-games repo,
+  Contents read/write) and give it to player 2. Never commit it anywhere.
+- Verified: node sync tests vs the real repo (CAS + stale-write rejection), full
+  two-device protocol E2E (create→P2 plays Germany→back to P1 at UK), and the whole
+  browser UI flow with a mocked GitHub API. v1.5.1 also fixed island paint order (Borneo).
+
 ## v1.5 (2026-07-05)
 - **Readability overhaul**: chips 23px (was 17), icons redrawn & 1.5× (fighter=single-engine
   w/ prop vs bomber=wide 4-engine; soldier vs cannon clearly distinct), count badges 16px,

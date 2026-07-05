@@ -23,6 +23,11 @@ window.UI = (function () {
     battleship: "Battleship" };
 
   let game = null, board = null, phaseSnapshot = null, saveKey = "axis.autosave";
+  // online ("Play by GitHub") context: {id, sha, mySeat, seatNames:{p1,p2}}
+  let online = null, onlineOutbox = [];
+  const otherSeat = () => online.mySeat === "p1" ? "p2" : "p1";
+  const seatOf = (power) => game.players[power].seat || null;
+  const iControl = (power) => !online || game.players[power].type === "ai" || seatOf(power) === online.mySeat;
 
   // ================= screens =================
   function show(id) {
@@ -31,22 +36,39 @@ window.UI = (function () {
   }
 
   // ================= new game =================
+  let onlineCreateMode = false; // when true, the setup screen assigns powers to Player 1/2
   function initNewGameScreen() {
     const grid = $("#powers-grid");
     grid.innerHTML = "";
+    const cfg = (window.Online && Online.config()) || {};
+    $("#screen-new h2").textContent = onlineCreateMode ? "CREATE AN ONLINE GAME" : "CREATE A HOTSEAT GAME";
+    const oldExtra = $("#online-extra"); if (oldExtra) oldExtra.remove();
+    if (onlineCreateMode) {
+      const extra = div("settings");
+      extra.id = "online-extra";
+      extra.innerHTML = `<label class="setting"><b>PLAYER 1 (YOU):</b> ${cfg.name || "?"}
+        &nbsp;&nbsp;<b>PLAYER 2:</b> <input id="p2-name" type="text" maxlength="14" placeholder="THEIR NAME"
+        style="background:#101215;border:1px solid var(--gold-dim);color:var(--gold);font:inherit;font-weight:700;padding:6px 10px;border-radius:4px;">
+        <span style="color:var(--dim)"> — assign each power below, then share the Game ID.</span></label>`;
+      grid.parentNode.insertBefore(extra, grid);
+    }
     for (const p of ["germany", "japan", "soviet", "uk", "us"]) { // axis left, allies right
       const card = div("power-card " + SIDES[p]);
+      const opts = onlineCreateMode
+        ? `<option value="p1"${SIDES[p] === "allies" ? " selected" : ""}>PLAYER 1</option>
+           <option value="p2"${SIDES[p] === "axis" ? " selected" : ""}>PLAYER 2</option>
+           <option value="ai">COMPUTER</option>`
+        : `<option value="human">HUMAN</option><option value="ai">COMPUTER</option>`;
       card.innerHTML = `
         <div class="power-emblem">${EMBLEM[p]}</div>
         <div class="power-name">${POWER_NAMES[p].toUpperCase()}</div>
-        <select data-power="${p}" class="ptype">
-          <option value="human">HUMAN</option>
-          <option value="ai">COMPUTER</option>
-        </select>
-        <input type="text" data-power="${p}" class="pname" placeholder="PLAYER NAME" maxlength="14">`;
+        <select data-power="${p}" class="ptype">${opts}</select>
+        <input type="text" data-power="${p}" class="pname" placeholder="PLAYER NAME" maxlength="14"
+          ${onlineCreateMode ? 'style="visibility:hidden"' : ""}>`;
       grid.appendChild(card);
       card.querySelector(".ptype").addEventListener("change", (e) => {
-        card.querySelector(".pname").style.visibility = e.target.value === "ai" ? "hidden" : "visible";
+        card.querySelector(".pname").style.visibility =
+          (onlineCreateMode || e.target.value === "ai") ? "hidden" : "visible";
       });
     }
     $("#custom-territories").checked = false;
@@ -89,13 +111,27 @@ window.UI = (function () {
     openModal("CUSTOMIZE TERRITORIES", body, [{ label: "DONE", cls: "primary" }]);
   }
 
-  function startNewGame() {
+  async function startNewGame() {
     const players = {};
+    const cfg = (window.Online && Online.config()) || {};
+    const p2name = onlineCreateMode ? (($("#p2-name").value || "").trim() || "Player 2") : null;
+    let hasP1 = false, hasP2 = false;
     for (const p of POWERS) {
-      const type = document.querySelector(`.ptype[data-power=${p}]`).value;
-      const name = document.querySelector(`.pname[data-power=${p}]`).value.trim() ||
-        (type === "ai" ? "Computer" : POWER_NAMES[p]);
-      players[p] = { type, name };
+      const v = document.querySelector(`.ptype[data-power=${p}]`).value;
+      if (onlineCreateMode) {
+        if (v === "ai") players[p] = { type: "ai", name: "Computer" };
+        else {
+          players[p] = { type: "human", name: v === "p1" ? (cfg.name || "Player 1") : p2name, seat: v };
+          if (v === "p1") hasP1 = true; else hasP2 = true;
+        }
+      } else {
+        const name = document.querySelector(`.pname[data-power=${p}]`).value.trim() ||
+          (v === "ai" ? "Computer" : POWER_NAMES[p]);
+        players[p] = { type: v, name };
+      }
+    }
+    if (onlineCreateMode && (!hasP1 || !hasP2)) {
+      banner("Assign at least one power to each player."); return;
     }
     const options = {
       straits: $("#opt-straits").checked,
@@ -105,11 +141,28 @@ window.UI = (function () {
     const overrides = $("#custom-territories").checked ? territoryOverrides : {};
     game = new Game({ mapData: MAP, players, options, territoryOverrides: overrides });
     game.title = $("#game-title").value.trim() || "1942 Campaign";
-    enterGame();
+    if (onlineCreateMode) {
+      const id = Online.newId();
+      online = { id, sha: null, mySeat: "p1", seatNames: { p1: cfg.name || "Player 1", p2: p2name } };
+      onlineOutbox = [];
+      Online.setSeat(id, "p1");
+      banner("Creating game on GitHub…", true);
+      try {
+        const res = await Online.putGame(id, packOnline(), null, "create " + id);
+        online.sha = res.sha;
+      } catch (e) { online = null; banner("Could not create game: " + e.message); return; }
+      banner(null);
+      await openModal("GAME CREATED — " + id, div("modal-note",
+        `Your Game ID is <b style="font-size:1.6rem;color:var(--gold)">${id}</b><br><br>
+         Text it to <b>${p2name}</b>. On their device they tap <b>🌐 JOIN ONLINE GAME</b>, enter the
+         shared token once, then this ID. Turns sync automatically whenever either of you plays.`),
+        [{ label: "START PLAYING", cls: "primary" }]);
+      enterGame();
+    } else enterGame();
   }
 
   // ================= game screen =================
-  function enterGame() {
+  function enterGame(afterShow) {
     show("#screen-game");
     if (!board) {
       board = Board.create($("#board"), MAP, {
@@ -121,8 +174,9 @@ window.UI = (function () {
     }
     board.setGame(game);
     if (location.hostname === "localhost" || location.hostname === "127.0.0.1")
-      window.__ui = { get game() { return game; }, onDrop, onDragStart, onStackTap, openMovePicker, board: () => board };
-    startPhase();
+      window.__ui = { get game() { return game; }, onDrop, onDragStart, onStackTap, openMovePicker,
+        board: () => board, get online() { return online; } };
+    (afterShow || startPhase)();
   }
 
   function topBar() {
@@ -159,13 +213,38 @@ window.UI = (function () {
     try {
       localStorage.setItem(saveKey, JSON.stringify({
         title: game.title, when: Date.now(), snap: game.snapshot(),
+        online: online ? { id: online.id, mySeat: online.mySeat, seatNames: online.seatNames } : null,
       }));
     } catch (e) { /* storage full */ }
   }
-  function loadAutosave() {
+  async function loadAutosave() {
     try {
       const d = JSON.parse(localStorage.getItem(saveKey) || "null");
       if (!d) return false;
+      if (d.online && d.online.id) {
+        // online game: GitHub is the source of truth — fetch the latest state
+        online = { id: d.online.id, sha: null, mySeat: d.online.mySeat, seatNames: d.online.seatNames };
+        onlineOutbox = [];
+        banner("Checking " + online.id + " on GitHub…", true);
+        try {
+          const g = await Online.getGame(online.id);
+          banner(null);
+          if (!g) { banner("Game " + online.id + " not found on GitHub."); online = null; return false; }
+          online.sha = g.sha;
+          game = Game.restore(g.data.snap, MAP);
+          game.title = g.data.title;
+          enterGame(() => {
+            if (g.data.winner) victoryScreen();
+            else if (g.data.turnSeat === online.mySeat) onRemote(g, true);
+            else enterWaiting();
+          });
+          return true;
+        } catch (e) {
+          banner("Can't reach GitHub (" + e.message + ") — check your connection.");
+          online = null; return false;
+        }
+      }
+      online = null;
       game = Game.restore(d.snap, MAP);
       game.title = d.title;
       enterGame();
@@ -182,8 +261,9 @@ window.UI = (function () {
     if (game.players[game.current].type === "human") aiFeedClear();
     sidePanel(null);
     autosave();
-    if (game.winner) return victoryScreen();
+    if (game.winner) { if (online) pushOnline(true); return victoryScreen(); }
     const pl = game.players[game.current];
+    if (online && pl.type === "human" && pl.seat !== online.mySeat) return pushAndWait();
     if (pl.type === "ai") return runAITurn();
 
     switch (game.phase) {
@@ -224,6 +304,8 @@ window.UI = (function () {
     autosave();
     const pl = game.players[game.current];
     if (pl.type === "ai") return startPhase();
+    // online: startPhase gates the other seat's powers (push & wait); own powers start directly
+    if (online) return startPhase();
     // hotseat handoff splash
     const b = div("", `<div class="handoff">
       <div class="handoff-emblem ${SIDES[game.current]}">${EMBLEM[game.current]}</div>
@@ -234,6 +316,7 @@ window.UI = (function () {
 
   $("#btn-end-phase").addEventListener("click", async () => {
     if (!game || game.players[game.current].type === "ai") return;
+    if (online && !iControl(game.current)) return; // spectating the other player's turn
     switch (game.phase) {
       case "purchase": game.endPurchase(); break;
       case "combatMove": {
@@ -321,7 +404,12 @@ window.UI = (function () {
       { label: "SAVE & EXIT TO MENU", cls: "", value: "exit" },
       { label: "GAME LOG", cls: "", value: "log" },
     ]);
-    if (choice === "exit") { autosave(); show("#screen-home"); refreshHome(); }
+    if (choice === "exit") {
+      autosave();
+      if (window.Online) Online.stopPolling();
+      online = null; // Continue re-syncs from GitHub for online games
+      show("#screen-home"); refreshHome();
+    }
     if (choice === "log") {
       const body = div("log-view", game.log.slice(-120).map(l =>
         `<div><b>R${l.round}</b> ${POWER_NAMES[l.power] || ""} <i>${PHASE_LABEL[l.phase] || ""}</i> — ${l.msg}</div>`).join(""));
@@ -555,7 +643,7 @@ window.UI = (function () {
 
   // ================= drag & drop =================
   const isMovePhase = () => game && (game.phase === "combatMove" || game.phase === "noncombatMove") &&
-    game.players[game.current].type === "human";
+    game.players[game.current].type === "human" && iControl(game.current);
 
   function onDragStart(spaceId, power) {
     if (!isMovePhase() || power !== game.current) return null;
@@ -796,6 +884,7 @@ window.UI = (function () {
 
   async function runBattle(bRec) {
     const battle = new Combat.Battle(game, bRec.space, { sbr: bRec.sbr });
+    const att0 = battle.att.slice(), def0 = battle.def.slice();
     const modal = battleModalShell(bRec, battle);
     let d;
     let evCursor = 0;
@@ -806,15 +895,22 @@ window.UI = (function () {
       flushEvents();
       modal.refreshSides();
       const answeringPower = d.side === "attacker" ? battle.attacker : battle.defPower;
-      const isAI = !answeringPower || game.players[answeringPower].type === "ai";
+      const auto = !answeringPower || game.players[answeringPower].type === "ai" ||
+        (online && seatOf(answeringPower) && seatOf(answeringPower) !== online.mySeat); // remote player: smart auto
       let ans;
-      if (isAI) { ans = AI.answer(game, battle, d); await pause(350); }
+      if (auto) { ans = AI.answer(game, battle, d); await pause(350); }
       else ans = await modal.humanDecision(d);
       battle.decide(ans);
     }
     flushEvents();
     modal.refreshSides();
     bRec.resolved = true;
+    if (online) {
+      const s = MAP.spaces[bRec.space], r = battle.result || {};
+      onlineOutbox.push(`⚔ <b>${s.name}</b>: ${r.type === "retreat" ? "attacker retreated" :
+        r.captured ? "captured by " + POWER_NAMES[battle.attacker] :
+        r.attackerWon ? "attacker won" : "defenders held"} · atk lost ${lossList(att0)} · def lost ${lossList(def0)}`);
+    }
     board.render(); topBar();
     await modal.finish(battle);
   }
@@ -945,6 +1041,7 @@ window.UI = (function () {
   const AI_PACE = 340;
 
   function aiFeed(html) {
+    if (online) onlineOutbox.push(html); // collected into the "while you were away" report
     const feed = $("#ai-feed");
     if (!feed) return;
     const e = div("ai-ev", html);
@@ -1054,8 +1151,183 @@ window.UI = (function () {
       <p>Victory cities: Axis ${game.victoryCityCount("axis")} · Allies ${game.victoryCityCount("allies")}</p></div>`);
     openModal("GAME OVER", body, [{ label: "BACK TO MENU", cls: "primary" }]).then(() => {
       localStorage.removeItem(saveKey);
+      if (window.Online) Online.stopPolling();
+      online = null;
       show("#screen-home"); refreshHome();
     });
+  }
+
+  // ================= online play ("Play by GitHub") =================
+  function packOnline() {
+    return { v: 1, id: online.id, title: game.title, seatNames: online.seatNames,
+      turnSeat: online.mySeat, snap: game.snapshot(), summary: onlineOutbox.slice(-40),
+      winner: game.winner || null, updated: Date.now() };
+  }
+
+  function openOnlineSetup() {
+    return new Promise((resolve) => {
+      const wrap = div("modal");
+      wrap.appendChild(div("modal-title", "ONLINE SETUP"));
+      const body = div("modal-body");
+      body.innerHTML = `
+        <div class="modal-note">Online games sync turns through the private GitHub repo
+          <b>${Online.repo()}</b>. Both players enter the <b>same shared token</b> once
+          (the game owner creates it on GitHub: Settings → Developer settings →
+          Fine-grained tokens → access to only that repo, Contents read &amp; write).</div>
+        <input id="ol-name" class="ol-input" type="text" maxlength="14" placeholder="YOUR NAME (e.g. JOE)">
+        <input id="ol-token" class="ol-input" type="password" placeholder="SHARED GITHUB TOKEN (github_pat_…)">
+        <div class="modal-note" id="ol-status"></div>`;
+      wrap.appendChild(body);
+      const btns = div("modal-btns");
+      const cancel = div("btn", "CANCEL"), save = div("btn primary", "VERIFY & SAVE");
+      btns.appendChild(cancel); btns.appendChild(save); wrap.appendChild(btns);
+      const ov = showOverlay(wrap);
+      const cfg = Online.config() || {};
+      body.querySelector("#ol-name").value = cfg.name || "";
+      body.querySelector("#ol-token").value = cfg.token || "";
+      cancel.onclick = () => { ov.remove(); resolve(false); };
+      save.onclick = async () => {
+        const name = body.querySelector("#ol-name").value.trim();
+        const token = body.querySelector("#ol-token").value.trim();
+        const st = body.querySelector("#ol-status");
+        if (!name || !token) { st.textContent = "Both fields are required."; return; }
+        Online.saveConfig({ name, token, repo: Online.repo() });
+        st.textContent = "Checking the token against GitHub…";
+        try { await Online.verifyToken(); ov.remove(); resolve(true); }
+        catch (e) { st.textContent = "✗ " + e.message; }
+      };
+    });
+  }
+  async function ensureOnlineSetup() {
+    const cfg = Online.config();
+    if (cfg && cfg.token && cfg.name) return true;
+    return openOnlineSetup();
+  }
+
+  async function openOnlineCreate() {
+    if (!(await ensureOnlineSetup())) return;
+    onlineCreateMode = true;
+    territoryOverrides = {};
+    initNewGameScreen();
+    show("#screen-new");
+  }
+
+  async function openOnlineJoin() {
+    if (!(await ensureOnlineSetup())) return;
+    const wrap = div("modal");
+    wrap.appendChild(div("modal-title", "JOIN ONLINE GAME"));
+    const body = div("modal-body");
+    body.innerHTML = `<div class="modal-note">Enter the Game ID you were sent (e.g. EAGLE-4821).</div>
+      <input id="ol-gameid" class="ol-input" type="text" placeholder="GAME ID" autocapitalize="characters">
+      <div class="modal-note" id="ol-status"></div>`;
+    wrap.appendChild(body);
+    const btns = div("modal-btns");
+    const cancel = div("btn", "CANCEL"), join = div("btn primary", "JOIN");
+    btns.appendChild(cancel); btns.appendChild(join); wrap.appendChild(btns);
+    const ov = showOverlay(wrap);
+    cancel.onclick = () => ov.remove();
+    join.onclick = async () => {
+      const id = body.querySelector("#ol-gameid").value.trim().toUpperCase();
+      const st = body.querySelector("#ol-status");
+      if (!id) { st.textContent = "Enter the Game ID."; return; }
+      st.textContent = "Looking up " + id + "…";
+      try {
+        const g = await Online.getGame(id);
+        if (!g) { st.textContent = "✗ No game found with that ID."; return; }
+        ov.remove();
+        const mySeat = Online.seat(id) || "p2"; // creator device remembers p1; everyone else is player 2
+        Online.setSeat(id, mySeat);
+        online = { id, sha: g.sha, mySeat, seatNames: g.data.seatNames };
+        onlineOutbox = [];
+        game = Game.restore(g.data.snap, MAP);
+        game.title = g.data.title;
+        enterGame(() => {
+          if (g.data.winner) victoryScreen();
+          else if (g.data.turnSeat === online.mySeat) onRemote(g, true);
+          else enterWaiting();
+        });
+      } catch (e) { st.textContent = "✗ " + e.message; }
+    };
+  }
+
+  // push the state and park this device until the other player moves
+  async function pushAndWait() {
+    sidePanel(null); board.clearHighlight();
+    banner("Sending turn to GitHub…", true);
+    const data = packOnline();
+    data.turnSeat = otherSeat();
+    try {
+      const res = await Online.putGame(online.id, data, online.sha,
+        `${game.title}: over to ${online.seatNames[otherSeat()]}`);
+      if (res.conflict) return onlineConflict();
+      online.sha = res.sha;
+      onlineOutbox = [];
+      autosave();
+    } catch (e) {
+      banner("Sync failed (" + e.message + ") — retrying in 10s…", true);
+      setTimeout(pushAndWait, 10000);
+      return;
+    }
+    enterWaiting();
+  }
+
+  function enterWaiting() {
+    const who = (online.seatNames && online.seatNames[otherSeat()]) || "opponent";
+    const d = div("panel");
+    d.appendChild(div("panel-title", "WAITING FOR " + who.toUpperCase()));
+    d.appendChild(div("panel-sub", "Game " + online.id + " — this screen checks GitHub every 15 seconds."));
+    const btn = div("btn primary", "CHECK NOW");
+    btn.style.cssText = "display:block;margin:12px auto;max-width:220px;";
+    btn.onclick = async () => {
+      try {
+        const g = await Online.getGame(online.id);
+        if (g && g.sha !== online.sha) onRemote(g); else banner("No update yet — still " + who + "'s turn.");
+      } catch (e) { banner(e.message); }
+    };
+    d.appendChild(btn);
+    d.appendChild(div("panel-cta", "You can close the app — resume from CONTINUE any time."));
+    sidePanel(d);
+    banner(`Waiting for <b>${who}</b>…`, true);
+    Online.startPolling(online.id, online.sha, onRemote);
+  }
+
+  function onRemote(g, skipRestore) {
+    online.sha = g.sha;
+    if (g.data.seatNames) online.seatNames = g.data.seatNames;
+    if (g.data.turnSeat !== online.mySeat && !g.data.winner) {
+      Online.startPolling(online.id, online.sha, onRemote); // still their turn
+      return;
+    }
+    Online.stopPolling();
+    if (!skipRestore) {
+      game = Game.restore(g.data.snap, MAP);
+      game.title = g.data.title;
+    }
+    onlineOutbox = [];
+    board.setGame(game); topBar(); autosave(); banner(null);
+    if (g.data.winner) return victoryScreen();
+    const rep = g.data.summary || [];
+    const body = div("");
+    body.appendChild(div("modal-note",
+      `<b>${(online.seatNames && online.seatNames[otherSeat()]) || "Your opponent"}</b> finished. What happened:`));
+    body.appendChild(div("log-view", rep.map(x => `<div>${x}</div>`).join("") || "<i>No battles this round.</i>"));
+    openModal("IT'S YOUR TURN — " + game.title.toUpperCase(), body,
+      [{ label: "PLAY", cls: "primary" }]).then(() => startPhase());
+  }
+
+  function onlineConflict() {
+    banner("The game changed on GitHub — loading the latest…");
+    Online.getGame(online.id).then(g => { if (g) onRemote(g); }).catch(e => banner(e.message));
+  }
+
+  async function pushOnline(final) {
+    if (!online) return;
+    try {
+      const data = packOnline();
+      if (final) data.winner = game.winner;
+      const r = await Online.putGame(online.id, data, online.sha, final ? "game over" : "sync");
+      if (!r.conflict) { online.sha = r.sha; onlineOutbox = []; }
+    } catch (e) { /* best effort */ }
   }
 
   // ================= modal helpers =================
@@ -1095,7 +1367,7 @@ window.UI = (function () {
     if (has) {
       try {
         const d = JSON.parse(localStorage.getItem(saveKey));
-        $("#btn-continue").innerHTML = `CONTINUE — <small>${d.title}</small>`;
+        $("#btn-continue").innerHTML = `CONTINUE — <small>${d.title}${d.online ? " · 🌐 " + d.online.id : ""}</small>`;
       } catch (e) {}
     }
   }
@@ -1103,14 +1375,19 @@ window.UI = (function () {
   function init() {
     initNewGameScreen();
     refreshHome();
-    $("#btn-new").onclick = () => { territoryOverrides = {}; show("#screen-new"); };
+    $("#btn-new").onclick = () => {
+      territoryOverrides = {}; online = null; onlineCreateMode = false;
+      initNewGameScreen(); show("#screen-new");
+    };
     $("#btn-continue").onclick = () => loadAutosave();
+    $("#btn-online-new").onclick = openOnlineCreate;
+    $("#btn-online-join").onclick = openOnlineJoin;
     $("#btn-edit-territories").onclick = openTerritoryEditor;
     $("#custom-territories").addEventListener("change", (e) => {
       $("#btn-edit-territories").style.display = e.target.checked ? "" : "none";
       if (e.target.checked) openTerritoryEditor();
     });
-    $("#new-back").onclick = () => show("#screen-home");
+    $("#new-back").onclick = () => { onlineCreateMode = false; show("#screen-home"); };
   }
 
   return { init, show };
