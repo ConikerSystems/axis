@@ -306,6 +306,69 @@ t("fighters still aboard a carrier are cargo, not attackers", () => {
   ok(b.att.includes(cv), "carrier fights");
 });
 
+console.log("— noncombat phase & transports —");
+t("noncombat phase exists in the turn sequence and moves land units", () => {
+  const g = mk();
+  g.endPurchase();                       // purchase → combatMove
+  eq(g.phase, "combatMove");
+  g.endCombatMove();                     // no moves → combat with no battles
+  eq(g.phase, "combat");
+  g.resolveUnopposed(); g.battles = [];
+  g.endCombat();                         // → noncombatMove
+  eq(g.phase, "noncombatMove", "noncombat phase exists");
+  const inf = g.unitsAt("karelia_s_s_r", u => u.type === "infantry")[0];
+  const r = g.reachable(inf, "noncombatMove");
+  ok(r.has("archangel"), "land unit can reposition into friendly territory");
+  ok(!r.has("finland"), "but NOT into hostile territory in noncombat");
+  g.moveUnit(inf.id, "archangel", "noncombatMove");
+  eq(inf.space, "archangel");
+  g.endNoncombatMove();
+  eq(g.phase, "mobilize", "noncombat flows into mobilize");
+});
+t("transport bridges troops in NONCOMBAT (load + offload, same zone)", () => {
+  const g = mk(); g.turnIndex = 1; g._snapshotTurnStart();
+  g.phase = "noncombatMove"; // germany
+  const tr = g.unitsAt("sz15", u => u.type === "transport")[0];
+  const inf = g.unitsAt("italy", u => u.type === "infantry")[0];
+  ok(g.canLoad(inf, tr), "can load in noncombat");
+  g.loadUnit(inf.id, tr.id);
+  eq(g.cargoOf(tr).length, 1);
+  g.offloadTransport(tr.id, "libya"); // friendly coast on the same sea zone
+  eq(inf.space, "libya", "troops delivered");
+  ok(!inf.onTransport, "no longer aboard");
+});
+t("transport sails then offloads in NONCOMBAT", () => {
+  const g = mk(); g.turnIndex = 1; g._snapshotTurnStart();
+  g.phase = "noncombatMove";
+  for (const u of g.unitsAt("sz14")) u.dead = true; // clear the UK cruiser so the route is friendly
+  g.units = g.units.filter(u => !u.dead);
+  const tr = g.unitsAt("sz15", u => u.type === "transport")[0];
+  const inf = g.unitsAt("italy", u => u.type === "infantry")[0];
+  g.loadUnit(inf.id, tr.id);
+  ok(g.reachable(tr, "noncombatMove").has("sz14"), "friendly route open");
+  g.moveUnit(tr.id, "sz14", "noncombatMove");
+  eq(inf.space, "sz14", "cargo travels with the transport");
+  g.offloadTransport(tr.id, "morocco"); // german-held coast on sz14
+  eq(inf.space, "morocco", "offloaded after sailing");
+  let threw = false;
+  try { g.offloadTransport(tr.id, "algeria"); } catch (e) { threw = true; }
+  ok(threw, "a transport offloads only once per turn");
+});
+t("noncombat transports respect hostility (no hostile zones, no enemy coasts)", () => {
+  const g = mk(); g.turnIndex = 1; g._snapshotTurnStart();
+  g.phase = "noncombatMove";
+  const tr = g.unitsAt("sz15", u => u.type === "transport")[0];
+  const inf = g.unitsAt("italy", u => u.type === "infantry")[0];
+  g.loadUnit(inf.id, tr.id);
+  ok(!g.reachable(tr, "noncombatMove").has("sz17"), "cannot sail into a hostile zone (UK destroyer) in noncombat");
+  let threw = false;
+  try { g.moveUnit(tr.id, "sz17", "noncombatMove"); } catch (e) { threw = true; }
+  ok(threw, "engine blocks the hostile move");
+  threw = false;
+  try { g.offloadTransport(tr.id, "egypt"); } catch (e) { threw = true; } // UK-held coast
+  ok(threw, "no offload onto an enemy coast in noncombat");
+});
+
 console.log("— purchase & mobilize —");
 t("purchase and mobilize flow", () => {
   const g = mk();

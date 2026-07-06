@@ -114,9 +114,11 @@ window.Board = (function () {
     const pointers = new Map();
     let pinch = null, panning = false, drag = null, moved = false;
 
+    let gestureStart = null; // where the finger went down — taps are judged from here
     svg.addEventListener("pointerdown", (e) => {
       svg.setPointerCapture(e.pointerId);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      gestureStart = { x: e.clientX, y: e.clientY };
       moved = false;
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
@@ -147,7 +149,11 @@ window.Board = (function () {
       const prev = pointers.get(e.pointerId);
       if (!prev) return;
       const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
-      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+      // a fingertip wobbles ~5-15px during a tap — only total travel from the
+      // press point counts as real movement, and generously so (fixes iPad taps
+      // silently turning into tiny pans and never registering)
+      if (gestureStart &&
+        Math.hypot(e.clientX - gestureStart.x, e.clientY - gestureStart.y) > 14) moved = true;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pinch && pointers.size === 2) {
         const [a, b] = [...pointers.values()];
@@ -170,6 +176,7 @@ window.Board = (function () {
         return;
       }
       if (panning) {
+        if (!moved) return; // don't scroll the map under a finger that's just tapping
         const r = svg.getBoundingClientRect();
         view.x += dx / r.width * W;
         view.y += dy / r.height * H;
@@ -304,6 +311,8 @@ window.Board = (function () {
             transform: `translate(${x},${y})`,
             "data-space": id, "data-power": gr.power, "data-type": gr.type, "data-count": gr.n,
           }, gUnits);
+          // generous invisible touch target so finger taps land on the piece, not the map
+          el("circle", { r: 36, fill: "rgba(0,0,0,0)" }, node);
           el("circle", { r: 23, fill: POWER_COLOR[gr.power], stroke: "#0c0e12", "stroke-width": 1.8 }, node);
           el("circle", { r: 21.5, fill: "url(#chipDome)", "pointer-events": "none" }, node); // plastic sheen
           const markup = (window.UNIT_ICONS && UNIT_ICONS[gr.type]) || "";

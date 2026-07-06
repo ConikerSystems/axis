@@ -2,6 +2,13 @@
 
 _Updated: 2026-07-05 (v1.3.0)_
 
+## v1.8.3 (2026-07-05) — iPad touch fix
+- Tap detection: total travel from press point > 14px = movement (was 3px per event —
+  finger wobble killed every tap on iPad, so nothing registered). Map no longer pans
+  under an undecided tap; pieces got 36px invisible touch targets; user-select disabled.
+- Noncombat phase + transports verified with 4 new engine tests (exists in sequence,
+  friendly-only land moves, NCM bridge/sail/offload, hostility respected). 43 tests pass.
+
 ## v1.8 (2026-07-05) — game list + delete/cancel
 - Home button JOIN ONLINE GAME → **MY ONLINE GAMES**: lists every game on the relay
   (title, players, whose turn, date) with ▶ OPEN and 🗑 DELETE (confirm; clears a stale
