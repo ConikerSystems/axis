@@ -401,11 +401,13 @@ window.UI = (function () {
   $("#btn-summary").addEventListener("click", openSummary);
 
   $("#btn-menu").addEventListener("click", async () => {
-    const choice = await openModal("MENU", div("", `<p class="modal-note">${game ? game.title : ""}</p>`), [
+    const menuBtns = [
       { label: "RESUME", cls: "" },
       { label: "SAVE & EXIT TO MENU", cls: "", value: "exit" },
       { label: "GAME LOG", cls: "", value: "log" },
-    ]);
+    ];
+    if (online) menuBtns.push({ label: "🗑 CANCEL GAME (DELETE FOR BOTH)", cls: "", value: "cancelGame" });
+    const choice = await openModal("MENU", div("", `<p class="modal-note">${game ? game.title : ""}${online ? " · 🌐 " + online.id : ""}</p>`), menuBtns);
     if (choice === "exit") {
       autosave();
       if (window.Online) Online.stopPolling();
@@ -416,6 +418,19 @@ window.UI = (function () {
       const body = div("log-view", game.log.slice(-120).map(l =>
         `<div><b>R${l.round}</b> ${POWER_NAMES[l.power] || ""} <i>${PHASE_LABEL[l.phase] || ""}</i> — ${l.msg}</div>`).join(""));
       openModal("GAME LOG", body, [{ label: "CLOSE", cls: "primary" }]);
+    }
+    if (choice === "cancelGame") {
+      const sure = await confirmModal("CANCEL " + online.id + "?",
+        `This permanently deletes "${game.title}" from GitHub for BOTH players. There is no undo.`);
+      if (!sure) return;
+      try {
+        Online.stopPolling();
+        await Online.deleteGame(online.id);
+        online = null;
+        localStorage.removeItem(saveKey);
+        banner("Game deleted.");
+        show("#screen-home"); refreshHome();
+      } catch (e) { banner("✗ " + e.message); }
     }
   });
 
@@ -1241,29 +1256,72 @@ window.UI = (function () {
     return true;
   }
 
-  async function openOnlineJoin() {
+  // MY ONLINE GAMES: every game on the relay — open it or delete it.
+  async function openOnlineGames() {
     if (!(await ensureOnlineSetup())) return;
     const wrap = div("modal");
-    wrap.appendChild(div("modal-title", "JOIN ONLINE GAME"));
+    wrap.appendChild(div("modal-title", "MY ONLINE GAMES"));
     const body = div("modal-body");
-    body.innerHTML = `<div class="modal-note">Easiest: tap the <b>invite link</b> the other player texted you — it does
-        everything. Or enter the Game ID here (e.g. EAGLE-4821).</div>
-      <input id="ol-gameid" class="ol-input" type="text" placeholder="GAME ID" autocapitalize="characters">
-      <div class="modal-note" id="ol-status"></div>`;
+    body.innerHTML = `<div class="modal-note" id="ol-status">Loading games from GitHub…</div><div id="ol-list"></div>`;
     wrap.appendChild(body);
     const btns = div("modal-btns");
-    const cancel = div("btn", "CANCEL"), join = div("btn primary", "JOIN");
-    btns.appendChild(cancel); btns.appendChild(join); wrap.appendChild(btns);
+    const byId = div("btn", "JOIN BY GAME ID"), close = div("btn primary", "CLOSE");
+    btns.appendChild(byId); btns.appendChild(close); wrap.appendChild(btns);
     const ov = showOverlay(wrap);
-    cancel.onclick = () => ov.remove();
-    join.onclick = async () => {
-      const id = body.querySelector("#ol-gameid").value.trim().toUpperCase();
-      const st = body.querySelector("#ol-status");
-      if (!id) { st.textContent = "Enter the Game ID."; return; }
-      try {
-        if (await joinOnlineGame(id, (t) => st.textContent = t)) ov.remove();
-      } catch (e) { st.textContent = "✗ " + e.message; }
+    close.onclick = () => ov.remove();
+    byId.onclick = () => {
+      const id = (prompt("Enter the Game ID (e.g. EAGLE-4821):") || "").trim().toUpperCase();
+      if (id) { ov.remove(); joinOnlineGame(id, (t) => banner(t)).catch(e => banner("✗ " + e.message)); }
     };
+    const st = body.querySelector("#ol-status"), list = body.querySelector("#ol-list");
+
+    const render = async () => {
+      list.innerHTML = ""; st.textContent = "Loading games from GitHub…";
+      let ids = [];
+      try { ids = await Online.listGames(); }
+      catch (e) { st.textContent = "✗ " + e.message; return; }
+      if (!ids.length) { st.textContent = "No online games yet — create one and invite someone!"; return; }
+      st.textContent = "";
+      const details = await Promise.all(ids.slice(0, 25).map(id =>
+        Online.getGame(id).then(g => ({ id, g })).catch(() => ({ id, g: null }))));
+      for (const { id, g } of details) {
+        const row = div("unit-row");
+        if (!g) { row.innerHTML = `<div class="unit-label">${id}</div>`; list.appendChild(row); continue; }
+        const d = g.data;
+        const mySeat = Online.seat(id);
+        const turnName = d.winner ? (d.winner === "axis" ? "AXIS WON" : "ALLIES WON")
+          : `${(d.seatNames || {})[d.turnSeat] || d.turnSeat}'s turn` +
+            (mySeat && d.turnSeat === mySeat ? " — YOU!" : "");
+        const when = d.updated ? new Date(d.updated).toLocaleDateString() : "";
+        row.innerHTML = `<div class="unit-label">${d.title || id} <em style="color:var(--dim);font-style:normal">· ${id}</em></div>
+          <div class="panel-sub" style="text-align:left;margin:2px 0 8px">${turnName}${when ? " · " + when : ""}
+            · ${(d.seatNames || {}).p1 || "P1"} vs ${(d.seatNames || {}).p2 || "P2"}</div>
+          <div class="unit-stats" style="justify-content:flex-start;gap:10px">
+            <span class="mini-btn ol-open">▶ OPEN</span>
+            <span class="mini-btn ol-del" style="border-color:var(--red);color:#ff8a75">🗑 DELETE</span>
+          </div>`;
+        row.querySelector(".ol-open").onclick = () => {
+          ov.remove();
+          joinOnlineGame(id, (t) => banner(t)).catch(e => banner("✗ " + e.message));
+        };
+        row.querySelector(".ol-del").onclick = async () => {
+          const sure = await confirmModal("DELETE " + id + "?",
+            `This permanently deletes "${d.title || id}" for BOTH players. There is no undo.`);
+          if (!sure) return;
+          try {
+            await Online.deleteGame(id);
+            // clear a local Continue that points at the deleted game
+            try { const a = JSON.parse(localStorage.getItem(saveKey) || "null");
+              if (a && a.online && a.online.id === id) localStorage.removeItem(saveKey); } catch (e) {}
+            banner(id + " deleted.");
+            refreshHome();
+            render();
+          } catch (e) { banner("✗ " + e.message); }
+        };
+        list.appendChild(row);
+      }
+    };
+    render();
   }
 
   // ---- invite links: everything player 2 needs, in one tap ----
@@ -1464,7 +1522,7 @@ window.UI = (function () {
     };
     $("#btn-continue").onclick = () => loadAutosave();
     $("#btn-online-new").onclick = openOnlineCreate;
-    $("#btn-online-join").onclick = openOnlineJoin;
+    $("#btn-online-join").onclick = openOnlineGames;
     $("#btn-edit-territories").onclick = openTerritoryEditor;
     $("#custom-territories").addEventListener("change", (e) => {
       $("#btn-edit-territories").style.display = e.target.checked ? "" : "none";

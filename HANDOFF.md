@@ -2,6 +2,13 @@
 
 _Updated: 2026-07-05 (v1.3.0)_
 
+## v1.8 (2026-07-05) — game list + delete/cancel
+- Home button JOIN ONLINE GAME → **MY ONLINE GAMES**: lists every game on the relay
+  (title, players, whose turn, date) with ▶ OPEN and 🗑 DELETE (confirm; clears a stale
+  local Continue). JOIN BY GAME ID kept as a fallback inside the list.
+- In-game menu gains 🗑 CANCEL GAME (DELETE FOR BOTH) for online games.
+- online.js: listGames() + deleteGame().
+
 ## v1.7 (2026-07-05) — one-tap invites
 - Player 2 needs ZERO setup: the creator taps 📲 INVITE and texts a link
   (…/axis/#join=<ID>&k=<token> — the fragment never reaches any server). Tapping it

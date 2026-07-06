@@ -76,6 +76,20 @@ window.Online = (function () {
     if (r.notFound) throw new Error("Token works but cannot see " + repo());
     return true;
   }
+  // list all game ids on the relay
+  async function listGames() {
+    const r = await gh(`/repos/${repo()}/contents/games?_=` + Date.now());
+    if (!Array.isArray(r)) return [];
+    return r.filter(f => f.name.endsWith(".json")).map(f => f.name.replace(/\.json$/, ""));
+  }
+  // permanently delete a game file (both players lose it)
+  async function deleteGame(id) {
+    const g = await gh(filePath(id) + "?_=" + Date.now());
+    if (g.notFound) return true;
+    const r = await gh(filePath(id), { method: "DELETE",
+      body: JSON.stringify({ message: "delete " + id, sha: g.sha }) });
+    return !r.conflict;
+  }
 
   // ---------- game ids ----------
   function newId() {
@@ -102,5 +116,5 @@ window.Online = (function () {
   function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
   return { config, saveConfig, seat, setSeat, getGame, putGame, verifyToken, newId,
-    startPolling, stopPolling, repo };
+    listGames, deleteGame, startPolling, stopPolling, repo };
 })();
