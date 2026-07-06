@@ -435,13 +435,36 @@ window.UI = (function () {
   });
 
   // ================= side panels =================
+  let panelCollapsed = false;
+  function panelToggleSync() {
+    const sp = $("#side-panel"), t = $("#panel-toggle");
+    if (!sp.classList.contains("open")) { t.style.display = "none"; return; }
+    t.style.display = "flex";
+    if (panelCollapsed) {
+      sp.style.transform = "translateX(105%)";
+      t.style.right = "0px";
+      t.textContent = "◀";
+    } else {
+      sp.style.transform = "";
+      t.style.right = Math.min(sp.offsetWidth, window.innerWidth * 0.88) + "px";
+      t.textContent = "▶";
+    }
+  }
   function sidePanel(content) {
     const sp = $("#side-panel");
     sp.innerHTML = "";
-    if (!content) { sp.classList.remove("open"); return; }
+    sp.style.transform = "";
+    if (!content) { sp.classList.remove("open"); panelToggleSync(); return; }
     sp.appendChild(content);
     sp.classList.add("open");
+    panelCollapsed = false; // each new panel opens expanded; the arrow tucks it away
+    panelToggleSync();
   }
+  $("#panel-toggle").addEventListener("click", () => {
+    panelCollapsed = !panelCollapsed;
+    panelToggleSync();
+  });
+  window.addEventListener("resize", panelToggleSync);
   function moveHelpPanel(combat) {
     const d = div("panel");
     d.appendChild(div("panel-title", combat ? "COMBAT MOVE" : "NONCOMBAT MOVE"));

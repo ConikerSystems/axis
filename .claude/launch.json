@@ -1,6 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "axis", "runtimeExecutable": "python3", "runtimeArgs": ["-m", "http.server", "8642"], "port": 8642 }
+    { "name": "axis", "runtimeExecutable": "python3", "runtimeArgs": ["tools/devserver.py", "8642"], "port": 8642 }
   ]
 }
