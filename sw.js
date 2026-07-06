@@ -1,7 +1,7 @@
 /* Axis 1942 service worker — NETWORK-FIRST with cached offline fallback.
    Fully self-contained app (no external assets) so it plays offline.
    Bump VERSION together with static/js/version.js on every deploy. */
-const VERSION = "axis-v11";
+const VERSION = "axis-v12";
 const SHELL = [
   "./",
   "index.html",
@@ -27,7 +27,10 @@ const SHELL = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(VERSION).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting())
+    caches.open(VERSION)
+      // cache:"reload" bypasses the HTTP cache so the precache is truly current
+      .then((cache) => cache.addAll(SHELL.map((u) => new Request(u, { cache: "reload" }))))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -46,7 +49,11 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
-    fetch(req)
+    // cache:"no-store" makes network-first REALLY network-first: a plain fetch()
+    // can be answered by the browser's HTTP cache with a stale file, which we
+    // would then re-save into our cache — locking an old version in. (Learned
+    // the hard way on iOS.)
+    fetch(req, { cache: "no-store" })
       .then((res) => {
         if (res && res.ok && res.type === "basic") {
           const copy = res.clone();

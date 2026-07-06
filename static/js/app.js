@@ -12,22 +12,37 @@
     window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
   }
 
-  // iOS standalone update button — force-refresh SW + caches (see WEB_APP_STANDARDS)
+  // iOS standalone update button. Checks the live version first (bypassing every
+  // cache), reports what it found, then fully replaces the service worker +
+  // caches and reloads. r.update() alone is not enough on iOS — unregister so
+  // the next load installs the new worker and precaches a fresh shell.
   const upd = document.getElementById("btn-update");
   if (upd) upd.addEventListener("click", async () => {
     if (!navigator.onLine) { alert("Connect to the internet, then try again."); return; }
-    upd.textContent = "UPDATING…";
+    upd.textContent = "CHECKING…";
+    let remote = null;
+    try {
+      const txt = await fetch("static/js/version.js?u=" + Date.now(), { cache: "no-store" })
+        .then((r) => r.text());
+      remote = (txt.match(/APP_VERSION\s*=\s*"([^"]+)"/) || [])[1] || null;
+    } catch (e) {}
+    if (remote && remote === window.APP_VERSION) {
+      upd.textContent = "✅ UP TO DATE — v" + remote;
+      setTimeout(() => { upd.textContent = "🔄 UPDATE APP"; }, 3000);
+      return;
+    }
+    upd.textContent = remote ? ("UPDATING TO v" + remote + "…") : "UPDATING…";
     try {
       if ("serviceWorker" in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();
-        for (const r of regs) await r.update();
+        for (const r of regs) await r.unregister();
       }
       if (window.caches) {
         const keys = await caches.keys();
         for (const k of keys) await caches.delete(k);
       }
     } catch (e) {}
-    location.href = "index.html?u=" + Date.now();
+    location.replace("index.html?u=" + Date.now());
   });
 
   const fb = document.getElementById("btn-feedback");
