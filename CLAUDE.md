@@ -16,3 +16,11 @@ read **[HANDOFF.md](HANDOFF.md)** first for current state and next steps.
   SVG map; `static/js/ui.js` orchestrates screens/phases/drag-drop.
 - Tests: `node tests/engine.test.js` (29 rules unit tests) and
   `node tests/smoke.test.js` (full AI-vs-AI games). Run both before any deploy.
+
+<!-- SOURCE-POLICY:START -->
+## Source of truth: GitHub (master) — managed by Claude Hub
+
+**GitHub is the master for Axis 1942.** Develop in the cloud (claude.ai/code, or the Claude app on iPhone) — pick this repo and the "Cloud › Claude" environment. Do NOT develop on the Mac.
+
+On the Mac this repo is a **replica**: each session pulls from GitHub first (safe fast-forward) and the local copy is never hand-edited. If it is detached to a pointer, `git clone` to restore a local copy. Databases/data stay local regardless — GitHub holds code only.
+<!-- SOURCE-POLICY:END -->
