@@ -18,7 +18,9 @@ read **[HANDOFF.md](HANDOFF.md)** first for current state and next steps.
   `node tests/smoke.test.js` (full AI-vs-AI games). Run both before any deploy.
 
 <!-- SOURCE-POLICY:START -->
-## Source of truth: local Mac (master) — managed by Claude Hub
+## Source of truth: GitHub (master) — managed by Claude Hub
 
-**The Mac is the master for Axis 1942;** GitHub is the synced backup. Edit on the Mac; the session pushes to GitHub at the end. Databases/data stay local — GitHub holds code only.
+**GitHub is the master for Axis 1942.** Develop in the cloud (claude.ai/code, or the Claude app on iPhone) — pick this repo and the "Cloud › Claude" environment. Do NOT develop on the Mac.
+
+On the Mac this repo is a **replica**: each session pulls from GitHub first (safe fast-forward) and the local copy is never hand-edited. If it is detached to a pointer, `git clone` to restore a local copy. Databases/data stay local regardless — GitHub holds code only.
 <!-- SOURCE-POLICY:END -->
