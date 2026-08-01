@@ -54,6 +54,40 @@ window.UI = (function () {
     arrows: `<path d="M4 12h16v-5l8 7-8 7v-5H4zM28 20H12" stroke="currentColor" stroke-width="2.2" fill="currentColor"/>`,
     coins: `<ellipse cx="16" cy="9" rx="10" ry="4"/><path d="M6 9v6c0 2.2 4.5 4 10 4s10-1.8 10-4V9M6 15v6c0 2.2 4.5 4 10 4s10-1.8 10-4v-6" fill="none" stroke="currentColor" stroke-width="2"/>`,
   };
+
+  // Golden sculpted "miniature" of a unit for the purchase/mobilize rows: the same
+  // recognizable silhouette as the map chips, but rendered in brass with a dark
+  // relief layer under a gold gradient and a soft top highlight — the look of the
+  // physical Axis & Allies plastic pieces cast in gold.
+  function goldPiece(type) {
+    const markup = (window.UNIT_ICONS && UNIT_ICONS[type]) || "";
+    const gid = "gp-" + type;
+    return `<svg class="gold-piece" viewBox="-14 -15 28 30" aria-hidden="true">
+      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0.25" y2="1">
+        <stop offset="0" stop-color="#fbe7ad"/><stop offset=".4" stop-color="#e0ad3d"/>
+        <stop offset=".75" stop-color="#a9781f"/><stop offset="1" stop-color="#7a5312"/>
+      </linearGradient></defs>
+      <g fill="#4d3409" color="#4d3409" opacity=".5" transform="translate(.8,1)">${markup}</g>
+      <g fill="url(#${gid})" color="url(#${gid})">${markup}</g>
+      <g fill="#fff7db" color="#fff7db" opacity=".22" transform="translate(-.5,-.6)">${markup}</g>
+    </svg>`;
+  }
+  // one-line role blurb shown when the "?" on a purchase row is tapped
+  const UNIT_DESC = {
+    infantry: "Cheap frontline defender (def 2); attacks at 2 when paired with artillery.",
+    artillery: "Boosts one attacking infantry to attack at 2.",
+    tank: "Fast armor — can blitz through undefended enemy territory.",
+    aaa: "Fires at attacking aircraft before battle; cannot attack.",
+    factory: "Builds new units each turn, up to the territory's income value.",
+    fighter: "Versatile aircraft (def 4); escorts, intercepts, lands after combat.",
+    bomber: "Long range, hits hard (atk 4), and can run strategic bombing raids.",
+    submarine: "Surprise first strike; can submerge to slip away from battle.",
+    transport: "Ferries land units across the sea; has no attack of its own.",
+    destroyer: "Anti-submarine screen — cancels enemy sub surprise strikes.",
+    cruiser: "Balanced warship; bombards the shore during amphibious assaults.",
+    carrier: "Floating airbase — carries up to two fighters at sea.",
+    battleship: "The heaviest warship: two hit points and shore bombardment.",
+  };
   const UNIT_NAME = { infantry: "Infantry", artillery: "Artillery", tank: "Tank", aaa: "Antiaircraft Artillery",
     factory: "Industrial Complex", fighter: "Fighter", bomber: "Bomber", submarine: "Submarine",
     transport: "Transport", destroyer: "Destroyer", cruiser: "Cruiser", carrier: "Aircraft Carrier",
@@ -624,8 +658,11 @@ window.UI = (function () {
     const d = div("panel purchase");
     const render = () => {
       d.innerHTML = "";
-      d.appendChild(div("panel-title", "PURCHASE UNITS"));
-      d.appendChild(div("panel-sub", "Units are mobilized during the Mobilize phase"));
+      const head = div("pu-head");
+      head.innerHTML = `<div class="pu-x" title="Close">✕</div><div class="pu-title">PURCHASE UNITS</div>`;
+      head.querySelector(".pu-x").onclick = () => { panelCollapsed = true; panelToggleSync(); };
+      d.appendChild(head);
+      d.appendChild(div("panel-sub", "Purchase units for war — mobilized during the Mobilize phase"));
       const spent = game.purchaseSpent();
       d.appendChild(div("purchase-status",
         `<span>REMAINING IPC <b class="green">${game.ipc[game.current] - spent}</b></span>
@@ -637,25 +674,30 @@ window.UI = (function () {
         tabs.appendChild(b);
       }
       d.appendChild(tabs);
-      d.appendChild(div("stat-head", `<span>ATK</span><span>DEF</span><span>MOV</span><span>COST</span><span>BUY</span>`));
+      d.appendChild(div("stat-head", `<span></span><span>ATK</span><span>DEF</span><span>MOV</span><span>COST</span><span>PURCHASE</span>`));
       for (const ut of TABS[tab]) {
         const u = UNITS[ut];
         const line = game.purchases.find(p => p.unit === ut);
         const qty = line ? line.qty : 0;
-        const row = div("unit-row");
+        const row = div("unit-row pu-row");
         row.innerHTML = `
-          <div class="unit-label">${UNIT_NAME[ut].toUpperCase()}</div>
-          <div class="unit-stats">
-            <span>${u.attack || "–"}</span><span>${u.defense || "–"}</span><span>${u.move || "–"}</span>
-            <span class="green">${u.cost}</span>
-            <span class="stepper"><button class="minus">−</button><b>${qty}</b><button class="plus">+</button></span>
-          </div>`;
+          <div class="pu-name">${UNIT_NAME[ut].toUpperCase()}</div>
+          <div class="pu-pic">${goldPiece(ut)}<span class="pu-q" title="What is this unit?">?</span></div>
+          <div class="pu-stat">${u.attack || "–"}</div>
+          <div class="pu-stat">${u.defense || "–"}</div>
+          <div class="pu-stat">${u.move || "–"}</div>
+          <div class="pu-stat green">${u.cost}</div>
+          <div class="stepper pu-buy"><button class="minus">−</button><b>${qty}</b><button class="plus">+</button></div>`;
         row.querySelector(".plus").onclick = () => {
           try { game.buy(ut, 1); } catch (e) { banner("Not enough IPCs"); }
           render(); topBar();
         };
         row.querySelector(".minus").onclick = () => {
           if (qty > 0) { game.buy(ut, -1); render(); topBar(); }
+        };
+        row.querySelector(".pu-q").onclick = (e) => {
+          e.stopPropagation();
+          banner(`<b>${UNIT_NAME[ut]}</b> — ${UNIT_DESC[ut] || ""}`);
         };
         d.appendChild(row);
       }
