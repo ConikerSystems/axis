@@ -1,6 +1,30 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-07-05 (v1.3.0)_
+_Updated: 2026-08-01 (v1.9.0)_
+
+## v1.9.0 (2026-08-01) — "war table" visual overhaul (match A&A 1942 Online look)
+- **Map format redesigned** to the reference aesthetic: the world map now reads as an
+  aged sea chart torn from a larger sheet and laid on a light "war table" (torn deckle
+  edges via an SVG displacement filter + drop shadow; light neutral surround). Ocean is a
+  muted grey-teal with a fractal-noise chart texture + faint graticule; sea zones are
+  transparent so the textured base shows through. Territory tints nudged to the muted
+  historical palette. All in `static/js/board.js` (defs + torn sheet) — no map-data edits.
+- **Charcoal topbar** with **historical nation roundels** (USSR gold star, German
+  Balkenkreuz, RAF/UK target, Japan rising-sun, US star) replacing the emoji, current
+  power ringed in gold. `roundel()` SVG helper in `ui.js`.
+- **Victory Cities tug-of-war bar** (centered): 13-segment red↔blue track filling from
+  each side, boxed counts (held / needed-to-win), flanked by each side's roundels —
+  replaces the old plain-text VC readout.
+- **Bottom-left contextual phase card** (title + one-liner + themed sepia glyph tile,
+  self-contained — no external photo) that taps through to the detail side-panel.
+- **Bottom-right round red END PHASE / HOLD button**: press-and-hold ~600ms (radial fill)
+  to end the phase, so the big button can't fire on an accidental tap. Old topbar
+  END PHASE button retired (handler refactored to `endPhaseAction`, still bound).
+- **Fullscreen ⛶ toggle** (Fullscreen API; iPhone Safari falls back to an "Add to Home
+  Screen" hint). **Pinch-to-zoom** verified working (unchanged gesture code; wheel/pinch
+  share the same zoom path — confirmed scale change in a headless render).
+- Version bumped `1.8.3 → 1.9.0`; `sw.js` cache `axis-v13 → axis-v14`. All 43 engine
+  tests + AI-vs-AI smoke games still pass (pure view/CSS change).
 
 ## v1.8.3 (2026-07-05) — iPad touch fix
 - Tap detection: total travel from press point > 14px = movement (was 3px per event —

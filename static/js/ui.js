@@ -17,6 +17,43 @@ window.UI = (function () {
   const PHASE_LABEL = { purchase: "Purchase", combatMove: "Combat Move", combat: "Combat",
     noncombatMove: "Noncombat Move", mobilize: "Mobilize", income: "Collect Income" };
   const EMBLEM = { soviet: "☭", germany: "✠", uk: "🎯", japan: "☀", us: "★" };
+
+  // --- historical nation roundels (SVG, viewBox 0 0 32 32) for topbar + VC bar ---
+  const STAR = "M0,-10 L2.94,-4.05 L9.51,-3.09 L4.76,1.55 L5.88,8.09 L0,5 L-5.88,8.09 L-4.76,1.55 L-9.51,-3.09 L-2.94,-4.05 Z";
+  const SUN_RAYS = Array.from({ length: 12 }, (_, i) => {
+    const a0 = (i * 30 - 6) * Math.PI / 180, a1 = (i * 30 + 6) * Math.PI / 180;
+    const pt = (r, a) => `${(16 + r * Math.cos(a)).toFixed(1)} ${(16 + r * Math.sin(a)).toFixed(1)}`;
+    return `<path d="M16 16L${pt(15, a0)}L${pt(15, a1)}Z" fill="#c62828"/>`;
+  }).join("");
+  const ROUNDEL_INNER = {
+    soviet: `<circle cx="16" cy="16" r="15" fill="#b12a2a" stroke="#7a1c1c" stroke-width="1.5"/>
+      <path transform="translate(16,16)" d="${STAR}" fill="#f3d24b" stroke="#8a6d18" stroke-width=".6"/>`,
+    germany: `<circle cx="16" cy="16" r="15" fill="#2c2f35" stroke="#15171b" stroke-width="1.5"/>
+      <g stroke="#e9e4d8" stroke-width="8" stroke-linecap="butt"><path d="M16 3.5V28.5"/><path d="M3.5 16H28.5"/></g>
+      <g stroke="#15171b" stroke-width="4" stroke-linecap="butt"><path d="M16 3.5V28.5"/><path d="M3.5 16H28.5"/></g>`,
+    uk: `<circle cx="16" cy="16" r="15" fill="#1d5a94"/><circle cx="16" cy="16" r="9.6" fill="#f0ebdd"/><circle cx="16" cy="16" r="4.6" fill="#b12a2a"/>`,
+    japan: `<circle cx="16" cy="16" r="15" fill="#f0ebdd" stroke="#c9b98f" stroke-width="1"/>${SUN_RAYS}<circle cx="16" cy="16" r="6.4" fill="#c62828"/>`,
+    us: `<circle cx="16" cy="16" r="15" fill="#1d5a94"/><path transform="translate(16,16) scale(1.28)" d="${STAR}" fill="#f0ebdd"/><circle cx="16" cy="16" r="2.6" fill="#b12a2a"/>`,
+  };
+  const roundel = (power, cls) =>
+    `<svg class="roundel ${cls || ""}" viewBox="0 0 32 32" aria-hidden="true">${ROUNDEL_INNER[power] || ""}</svg>`;
+
+  // --- contextual phase card (bottom-left) copy + themed glyph ---
+  const PHASE_CARD = {
+    purchase: { title: "PURCHASE UNITS", desc: "Buy units to mobilize this turn.", glyph: "factory" },
+    combatMove: { title: "COMBAT MOVE", desc: "Move units into enemy spaces.", glyph: "swords" },
+    combat: { title: "RESOLVE COMBAT", desc: "Fight your declared battles.", glyph: "burst" },
+    noncombatMove: { title: "NONCOMBAT MOVE", desc: "Reposition and land aircraft.", glyph: "arrows" },
+    mobilize: { title: "MOBILIZE", desc: "Place your newly built units.", glyph: "factory" },
+    income: { title: "COLLECT INCOME", desc: "Gather IPCs from your territories.", glyph: "coins" },
+  };
+  const CARD_GLYPH = {
+    factory: `<path d="M4 26V13l6 4v-4l6 4v-4l6 4V9h4v17z"/>`,
+    swords: `<path d="M6 26l6-6M26 6l-8 8M6 6l14 14M26 26l-6-6" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/>`,
+    burst: `<path d="M16 3l3 8 8-4-4 8 8 3-8 3 4 8-8-4-3 8-3-8-8 4 4-8-8-3 8-3-4-8 8 4z"/>`,
+    arrows: `<path d="M4 12h16v-5l8 7-8 7v-5H4zM28 20H12" stroke="currentColor" stroke-width="2.2" fill="currentColor"/>`,
+    coins: `<ellipse cx="16" cy="9" rx="10" ry="4"/><path d="M6 9v6c0 2.2 4.5 4 10 4s10-1.8 10-4V9M6 15v6c0 2.2 4.5 4 10 4s10-1.8 10-4v-6" fill="none" stroke="currentColor" stroke-width="2"/>`,
+  };
   const UNIT_NAME = { infantry: "Infantry", artillery: "Artillery", tank: "Tank", aaa: "Antiaircraft Artillery",
     factory: "Industrial Complex", fighter: "Fighter", bomber: "Bomber", submarine: "Submarine",
     transport: "Transport", destroyer: "Destroyer", cruiser: "Cruiser", carrier: "Aircraft Carrier",
@@ -186,7 +223,7 @@ window.UI = (function () {
     const seq = $("#tb-powers");
     seq.innerHTML = "";
     POWERS.forEach((p, i) => {
-      const e = div("tb-power " + SIDES[p] + (i === game.turnIndex ? " current" : ""), EMBLEM[p]);
+      const e = div("tb-power " + SIDES[p] + (i === game.turnIndex ? " current" : ""), roundel(p));
       e.title = POWER_NAMES[p];
       seq.appendChild(e);
     });
@@ -195,13 +232,45 @@ window.UI = (function () {
     Object.keys(PHASE_LABEL).forEach((ph) => {
       dots.appendChild(div("dot" + (ph === game.phase ? " on" : "")));
     });
+    // Victory Cities tug-of-war bar: 13 cities total, axis fills from the left,
+    // allies from the right, neutral/uncontrolled stays grey in the middle.
+    const TOTAL_VC = 13;
     const ax = game.victoryCityCount("axis"), al = game.victoryCityCount("allies");
     const need = game.options.totalVictory ? [13, 13] : [9, 10];
-    $("#tb-vc").innerHTML = `<span class="ax">AXIS ${ax}/${need[0]}</span><span class="al">ALLIES ${al}/${need[1]}</span>`;
+    let segs = "";
+    for (let i = 0; i < TOTAL_VC; i++)
+      segs += `<i class="${i < ax ? "ax" : i >= TOTAL_VC - al ? "al" : "mid"}"></i>`;
+    $("#tb-vc").innerHTML = `<div class="vc-label">VICTORY CITIES</div>
+      <div class="vc-row">
+        <div class="vc-flank axis">${roundel("germany", "sm")}${roundel("japan", "sm")}</div>
+        <div class="vc-box axis" title="Axis victory cities (need ${need[0]} to win)">${ax}<small>/${need[0]}</small></div>
+        <div class="vc-track">${segs}</div>
+        <div class="vc-box allies" title="Allied victory cities (need ${need[1]} to win)">${al}<small>/${need[1]}</small></div>
+        <div class="vc-flank allies">${roundel("uk", "sm")}${roundel("soviet", "sm")}${roundel("us", "sm")}</div>
+      </div>`;
     const pl = game.players[game.current];
     $("#tb-ipc").textContent = game.ipc[game.current] + " IPC";
     $("#tb-player").textContent = `${POWER_NAMES[game.current].toUpperCase()} — ${pl.name}${pl.type === "ai" ? " (COMPUTER)" : ""}`;
     $("#btn-undo").style.display = (game.phase === "combatMove" || game.phase === "noncombatMove") ? "" : "none";
+    updatePhaseCard();
+  }
+
+  // Bottom-left contextual phase card + bottom-right HOLD button. The card mirrors
+  // the current phase and taps through to the detail side-panel; HOLD ends the phase.
+  function updatePhaseCard() {
+    const card = $("#phase-card"), hold = $("#btn-hold");
+    if (!card || !game) return;
+    const info = PHASE_CARD[game.phase] || PHASE_CARD.purchase;
+    const pl = game.players[game.current];
+    const mine = pl.type === "human" && iControl(game.current);
+    card.innerHTML = `
+      <div class="pc-art ${SIDES[game.current]}"><svg viewBox="0 0 32 32" fill="currentColor">${CARD_GLYPH[info.glyph] || ""}</svg></div>
+      <div class="pc-body"><div class="pc-title">${info.title}</div><div class="pc-desc">${info.desc}</div></div>`;
+    card.style.display = mine ? "flex" : "none";
+    // HOLD only ends a phase the local human is actively driving (not combat, which
+    // is resolved through the battle list, and not the other seat's online turn).
+    const canHold = mine && game.phase !== "combat" && game.phase !== "income" && !game.winner;
+    hold.style.display = canHold ? "flex" : "none";
   }
 
   function banner(html, sticky) {
@@ -316,7 +385,7 @@ window.UI = (function () {
     openModal("NEXT PLAYER", b, [{ label: "BEGIN TURN", cls: "primary" }]).then(() => startPhase());
   }
 
-  $("#btn-end-phase").addEventListener("click", async () => {
+  async function endPhaseAction() {
     if (!game || game.players[game.current].type === "ai") return;
     if (online && !iControl(game.current)) return; // spectating the other player's turn
     switch (game.phase) {
@@ -346,7 +415,58 @@ window.UI = (function () {
       case "mobilize": game.endMobilize(); break;
     }
     startPhase();
-  });
+  }
+  $("#btn-end-phase").addEventListener("click", endPhaseAction);
+
+  // Big round HOLD button (bottom-right): press-and-hold ~600ms to end the phase,
+  // so the prominent button can't end a turn by an accidental tap.
+  (function wireHold() {
+    const hold = $("#btn-hold");
+    if (!hold) return;
+    let timer = null, fired = false;
+    const cancel = () => { clearInterval(timer); timer = null; hold.classList.remove("holding"); hold.style.removeProperty("--fill"); };
+    const start = (e) => {
+      if (e.button && e.button !== 0) return;
+      e.preventDefault(); fired = false;
+      const t0 = Date.now(); const DUR = 600;
+      hold.classList.add("holding");
+      timer = setInterval(() => {
+        const p = Math.min(1, (Date.now() - t0) / DUR);
+        hold.style.setProperty("--fill", (p * 100).toFixed(0) + "%");
+        if (p >= 1 && !fired) { fired = true; cancel(); endPhaseAction(); }
+      }, 16);
+    };
+    hold.addEventListener("pointerdown", start);
+    hold.addEventListener("pointerup", cancel);
+    hold.addEventListener("pointerleave", cancel);
+    hold.addEventListener("pointercancel", cancel);
+  })();
+
+  // Fullscreen toggle (⛶). iOS iPhone Safari lacks the Fullscreen API, so fall back
+  // to a hint about installing the PWA for a true full-screen experience.
+  (function wireFullscreen() {
+    const btn = $("#btn-fullscreen");
+    if (!btn) return;
+    const doc = document;
+    btn.addEventListener("click", () => {
+      const fsEl = doc.fullscreenElement || doc.webkitFullscreenElement;
+      if (fsEl) {
+        (doc.exitFullscreen || doc.webkitExitFullscreen || (() => {})).call(doc);
+        return;
+      }
+      const root = doc.documentElement;
+      const req = root.requestFullscreen || root.webkitRequestFullscreen;
+      if (req) req.call(root).catch(() => {});
+      else banner("For full screen on iPhone: <b>Share ▸ Add to Home Screen</b>, then open Axis 1942 from the icon.", false);
+    });
+    const sync = () => {
+      const on = !!(doc.fullscreenElement || doc.webkitFullscreenElement);
+      btn.textContent = on ? "⤢" : "⛶";
+      btn.title = on ? "Exit full screen" : "Full screen";
+    };
+    doc.addEventListener("fullscreenchange", sync);
+    doc.addEventListener("webkitfullscreenchange", sync);
+  })();
 
   $("#btn-undo").addEventListener("click", () => {
     if (phaseSnapshot && (game.phase === "combatMove" || game.phase === "noncombatMove")) {
@@ -461,6 +581,13 @@ window.UI = (function () {
     panelToggleSync();
   }
   $("#panel-toggle").addEventListener("click", () => {
+    panelCollapsed = !panelCollapsed;
+    panelToggleSync();
+  });
+  // Tapping the bottom-left phase card opens the detail panel (or tucks it away).
+  $("#phase-card").addEventListener("click", () => {
+    const sp = $("#side-panel");
+    if (!sp.classList.contains("open")) return; // nothing detailed for this phase
     panelCollapsed = !panelCollapsed;
     panelToggleSync();
   });

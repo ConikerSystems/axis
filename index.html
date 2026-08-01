@@ -61,20 +61,28 @@
   <!-- GAME -->
   <div id="screen-game" class="screen">
     <div id="topbar">
-      <div id="btn-menu" class="tb-btn">⚙</div>
+      <div id="btn-menu" class="tb-btn icon" title="Menu">⚙</div>
       <div class="tb-block"><label>ROUND</label><div id="tb-round">1</div></div>
       <div id="tb-powers"></div>
       <div class="tb-block phase"><div id="tb-phase">PURCHASE</div><div id="tb-dots"></div></div>
       <div id="tb-vc"></div>
-      <div class="tb-block"><label id="tb-player"></label><div id="tb-ipc"></div></div>
-      <div id="btn-summary" class="tb-btn" title="Country summary">📊</div>
-      <div id="btn-undo" class="tb-btn" title="Undo moves this phase">↩</div>
-      <div id="btn-end-phase" class="tb-btn end">END<br>PHASE</div>
+      <div class="tb-block ipc"><label id="tb-player"></label><div id="tb-ipc"></div></div>
+      <div class="tb-icons">
+        <div id="btn-fullscreen" class="tb-btn icon" title="Full screen">⛶</div>
+        <div id="btn-summary" class="tb-btn icon" title="Country summary">📊</div>
+        <div id="btn-undo" class="tb-btn icon" title="Undo moves this phase">↩</div>
+      </div>
+      <div id="btn-end-phase" hidden></div>
     </div>
     <div id="board-wrap">
       <svg id="board"></svg>
       <div id="banner"></div>
       <div id="ai-feed"></div>
+      <div id="phase-card"></div>
+      <div id="btn-hold">
+        <div class="hold-cap">END PHASE</div>
+        <div class="hold-knob"><span class="hold-arrow">➜</span><span class="hold-txt">HOLD</span></div>
+      </div>
       <div id="side-panel"></div>
       <div id="panel-toggle" title="Show / hide panel">▶</div>
     </div>
