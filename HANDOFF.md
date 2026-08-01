@@ -1,6 +1,18 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-01 (v1.9.0)_
+_Updated: 2026-08-01 (v1.9.1)_
+
+## v1.9.1 (2026-08-01) — rules fix + label polish
+- **Strategic bombing AA corrected (rules)**: a bombing raid only draws antiaircraft
+  fire when an actual **AA gun is in the target territory** (1942.2) — previously every
+  IC got a free 1-die-per-bomber shot even with no AA gun. Fire now follows the combat
+  AA rule (1 die/bomber, max 3 per gun, hit on 1). `combat.js` `icAA` step. New engine
+  test locks both cases (no gun → no AA fire; gun present → AA fires). **44 tests pass.**
+- **Player label**: the top bar (and country-summary subtitle) no longer print the power
+  name twice when a seat's name is left at its default — "SOVIET UNION — SOVIET UNION"
+  now reads just "SOVIET UNION". `ui.js` `topBar()` + summary.
+- Version `1.9.0 → 1.9.1`; `sw.js` cache `axis-v14 → axis-v15`.
+
 
 ## v1.9.0 (2026-08-01) — "war table" visual overhaul (match A&A 1942 Online look)
 - **Map format redesigned** to the reference aesthetic: the world map now reads as an

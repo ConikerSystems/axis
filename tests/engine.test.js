@@ -487,6 +487,24 @@ t("strategic bombing damages IC with cap", () => {
   ok(b.done);
   ok((g.icDamage["karelia_s_s_r"] || 0) <= 4, "cap 2x ipc(2)=4");
 });
+t("bombing raid: AA fires only when an AA gun defends the IC", () => {
+  // no AA gun in karelia → no antiaircraft fire, bomber survives to bomb
+  const g = mk({ seed: 5 }); g.turnIndex = 1; g.phase = "combatMove";
+  const bmb = g._spawn("bomber", "germany", "germany");
+  g.moveUnit(bmb.id, "karelia_s_s_r", "combatMove"); g.setSBR(bmb.id);
+  g.endCombatMove();
+  const b1 = autoBattle(g, "karelia_s_s_r", { sbr: true });
+  ok(!b1.events.some(e => e.label === "Antiaircraft fire"), "no AA fire without a gun present");
+  ok(!bmb.dead, "bomber not lost to phantom IC air defense");
+  // with an AA gun present → antiaircraft fire occurs
+  const g2 = mk({ seed: 5 }); g2.turnIndex = 1; g2.phase = "combatMove";
+  g2._spawn("aaa", "soviet", "karelia_s_s_r");
+  const bmb2 = g2._spawn("bomber", "germany", "germany");
+  g2.moveUnit(bmb2.id, "karelia_s_s_r", "combatMove"); g2.setSBR(bmb2.id);
+  g2.endCombatMove();
+  const b2 = autoBattle(g2, "karelia_s_s_r", { sbr: true });
+  ok(b2.events.some(e => e.label === "Antiaircraft fire"), "AA fires when a gun defends");
+});
 t("amphibious assault from transport", () => {
   const g = mk(); g.turnIndex = 1; g.phase = "combatMove"; // germany
   const tr = g._spawn("transport", "germany", "sz3");

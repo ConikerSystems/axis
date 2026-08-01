@@ -285,7 +285,10 @@ window.UI = (function () {
       </div>`;
     const pl = game.players[game.current];
     $("#tb-ipc").textContent = game.ipc[game.current] + " IPC";
-    $("#tb-player").textContent = `${POWER_NAMES[game.current].toUpperCase()} — ${pl.name}${pl.type === "ai" ? " (COMPUTER)" : ""}`;
+    const pName = POWER_NAMES[game.current].toUpperCase();
+    // only append the player's name when it differs from the power (avoids "SOVIET UNION — SOVIET UNION")
+    const pCustom = pl.name && pl.name.toUpperCase() !== pName ? ` — ${pl.name}` : "";
+    $("#tb-player").textContent = `${pName}${pCustom}${pl.type === "ai" ? " (COMPUTER)" : ""}`;
     $("#btn-undo").style.display = (game.phase === "combatMove" || game.phase === "noncombatMove") ? "" : "none";
     updatePhaseCard();
   }
@@ -534,8 +537,10 @@ window.UI = (function () {
       const st = sideTotals[SIDES[p]];
       st.ipc += game.ipc[p]; st.prod += prod; st.terr += terr; st.vc += vc; st.units += units;
       const row = div("sum-row " + SIDES[p] + (p === game.current ? " current" : ""));
+      const subName = game.players[p].name && game.players[p].name !== POWER_NAMES[p] ? game.players[p].name : "";
+      const subAI = game.players[p].type === "ai" ? (subName ? " (Computer)" : "Computer") : "";
       row.innerHTML = `<span class="sum-name">${EMBLEM[p]} ${POWER_NAMES[p]}
-          <small>${game.players[p].name}${game.players[p].type === "ai" ? " (Computer)" : ""}${game.capitalHeld(p) ? "" : " · ⚠ capital lost"}</small></span>
+          <small>${subName}${subAI}${game.capitalHeld(p) ? "" : " · ⚠ capital lost"}</small></span>
         <span class="green"><b>${game.ipc[p]}</b></span><span><b>${prod}</b></span>
         <span>${terr}</span><span>${vc}</span><span>${units}</span>`;
       table.appendChild(row);

@@ -341,9 +341,14 @@
         case "icAA": {
           const bombers = this.alive(this.bombers);
           if (!bombers.length) break;
-          const dice = g.roll(bombers.length, "IC air defense");
+          // 1942.2: bombers are fired on during a raid only if an antiaircraft gun is
+          // present in the target territory (an IC has no inherent air defense).
+          const aaGuns = g.unitsAt(this.space, u => u.type === "aaa" && !g.isFriendly(this.attacker, u.power));
+          if (!aaGuns.length) break;
+          const shots = Math.min(aaGuns.length * 3, bombers.length); // 1 die/bomber, max 3 per gun
+          const dice = g.roll(shots, "AA fire (bombing raid)");
           const hits = dice.filter(d => d === 1).length;
-          this._ev("dice", { side: "defender", label: "Industrial complex air defense", dice, hits });
+          this._ev("dice", { side: "defender", label: "Antiaircraft fire", dice, hits });
           for (let i = 0; i < hits; i++) { const b = this.alive(this.bombers)[0]; if (b) this._reallyKill(b); }
           break;
         }
