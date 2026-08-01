@@ -21,7 +21,8 @@ _Updated: 2026-08-01 (v1.9.0)_
   **golden sculpted "miniature"** (the existing `unit-icons.js` silhouette rendered in a
   brass gradient with a dark relief layer + top highlight — no new art), a red ✕ close
   tab, boxed IPC/PURCHASED readouts, aligned ATK/DEF/MOV/COST/PURCHASE columns, and a
-  blue **?** info dot per row that banners the unit's role. `goldPiece()` helper in `ui.js`.
+  blue **?** info dot per row that banners the unit's role. The **Mobilize** panel shows
+  the same golden pieces with a "N to place" count. `goldPiece()` helper in `ui.js`.
 - **Bottom-right round red END PHASE / HOLD button**: press-and-hold ~600ms (radial fill)
   to end the phase, so the big button can't fire on an accidental tap. Old topbar
   END PHASE button retired (handler refactored to `endPhaseAction`, still bound).

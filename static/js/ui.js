@@ -248,7 +248,8 @@ window.UI = (function () {
     board.setGame(game);
     if (location.hostname === "localhost" || location.hostname === "127.0.0.1")
       window.__ui = { get game() { return game; }, onDrop, onDragStart, onStackTap, openMovePicker,
-        board: () => board, get online() { return online; }, handleInvite, inviteLink };
+        board: () => board, get online() { return online; }, handleInvite, inviteLink,
+        startPhase, openMobilizePanel, openPurchasePanel };
     (afterShow || startPhase)();
   }
 
@@ -755,9 +756,10 @@ window.UI = (function () {
       for (const p of game.purchases) {
         if (p.qty <= 0) continue;
         any = true;
-        const row = div("unit-row selectable" + (selected === p.unit ? " on" : ""));
-        row.innerHTML = `<div class="unit-label">${chipHtml(p.unit, game.current)} ${UNIT_NAME[p.unit].toUpperCase()}</div>
-          <div class="unit-stats"><b>${p.qty} left</b></div>`;
+        const row = div("unit-row selectable mob-row" + (selected === p.unit ? " on" : ""));
+        row.innerHTML = `<div class="mob-pic">${goldPiece(p.unit)}</div>
+          <div class="mob-info"><div class="unit-label">${UNIT_NAME[p.unit].toUpperCase()}</div>
+            <div class="mob-left"><b>${p.qty}</b> to place</div></div>`;
         row.onclick = () => { selected = p.unit; mobilizeHighlight(p.unit); render(); };
         d.appendChild(row);
       }
