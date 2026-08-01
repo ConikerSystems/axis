@@ -7,11 +7,11 @@ window.Board = (function () {
   const POWER_COLOR = { // chip tints matched to the reference app
     soviet: "#8a2b2b", germany: "#26292e", uk: "#c2a469", japan: "#d5852f", us: "#6d8a48",
   };
-  const POWER_FILL = { // muted map fills, weathered-board style
-    soviet: "#c08a70", germany: "#8ea3ad", uk: "#d9c49a", japan: "#e2a35c", us: "#a9b385",
+  const POWER_FILL = { // muted historical map fills, aged-chart style
+    soviet: "#c8917a", germany: "#95a7ad", uk: "#d8c191", japan: "#df9a4e", us: "#9fb079",
   };
-  const NEUTRAL_FILL = "#cfc6b3";
-  const SEA_FILL = "#a7b8b1";
+  const NEUTRAL_FILL = "#d8cfba";
+  const SEA_FILL = "#8f9d97"; // aged sea-chart grey-teal
   const GLYPH = { infantry: "I", artillery: "A", tank: "T", aaa: "AA", factory: "IC",
     fighter: "F", bomber: "B", submarine: "S", transport: "Tr", destroyer: "D",
     cruiser: "C", carrier: "CV", battleship: "BB" };
@@ -30,7 +30,7 @@ window.Board = (function () {
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.innerHTML = "";
 
-    // parchment texture + vignette
+    // parchment texture + vignette + torn-sheet edge + old-chart graticule
     const defs = el("defs", {}, svg);
     defs.innerHTML = `
       <filter id="paper" x="0" y="0" width="100%" height="100%">
@@ -38,9 +38,24 @@ window.Board = (function () {
         <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.04 0"/>
         <feComposite operator="over" in2="SourceGraphic"/>
       </filter>
+      <filter id="seaTexture" x="-2%" y="-2%" width="104%" height="104%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.018 0.02" numOctaves="4" seed="11" result="n"/>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.07 0"/>
+        <feComposite operator="over" in2="SourceGraphic"/>
+      </filter>
+      <filter id="torn" x="-6%" y="-6%" width="112%" height="112%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="3" seed="7" result="n"/>
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="30" xChannelSelector="R" yChannelSelector="G"/>
+      </filter>
+      <filter id="sheetShadow" x="-8%" y="-8%" width="116%" height="116%">
+        <feDropShadow dx="0" dy="7" stdDeviation="12" flood-color="#3a3a34" flood-opacity="0.4"/>
+      </filter>
+      <pattern id="grat" width="120" height="120" patternUnits="userSpaceOnUse">
+        <path d="M120 0V120M0 120H120" stroke="#5d6a64" stroke-width="1" fill="none" opacity="0.16"/>
+      </pattern>
       <radialGradient id="vign" cx="50%" cy="50%" r="75%">
-        <stop offset="70%" stop-color="#000" stop-opacity="0"/>
-        <stop offset="100%" stop-color="#000" stop-opacity="0.25"/>
+        <stop offset="62%" stop-color="#000" stop-opacity="0"/>
+        <stop offset="100%" stop-color="#000" stop-opacity="0.28"/>
       </radialGradient>
       <radialGradient id="chipDome" cx="38%" cy="32%" r="80%">
         <stop offset="0%" stop-color="#fff" stop-opacity="0.32"/>
@@ -53,6 +68,13 @@ window.Board = (function () {
       </marker>`;
 
     const vp = el("g", { id: "viewport" }, svg);
+    // torn ocean sheet: a full-bleed base so the whole map reads as one aged chart
+    // torn from a larger sheet, with a soft drop shadow onto the table beneath.
+    const gSheet = el("g", { filter: "url(#sheetShadow)" }, vp);
+    el("rect", { x: 0, y: 0, width: W, height: H, fill: SEA_FILL, filter: "url(#torn)" }, gSheet);
+    el("rect", { x: 40, y: 40, width: W - 80, height: H - 80, fill: SEA_FILL, filter: "url(#seaTexture)",
+      "pointer-events": "none" }, vp);
+    el("rect", { x: 40, y: 40, width: W - 80, height: H - 80, fill: "url(#grat)", "pointer-events": "none" }, vp);
     const gSpaces = el("g", { id: "spaces" }, vp);
     const gBorders = el("g", { id: "borders" }, vp);
     const gLabels = el("g", { id: "labels" }, vp);
@@ -248,7 +270,7 @@ window.Board = (function () {
       if (!game) return;
       for (const [id, path] of Object.entries(spacePaths)) {
         const s = MAP.spaces[id];
-        if (s.sea) { path.setAttribute("fill", SEA_FILL); continue; }
+        if (s.sea) { path.setAttribute("fill", "transparent"); continue; } // textured ocean base shows through
         if (s.impassable) { path.setAttribute("fill", NEUTRAL_FILL); continue; }
         const own = game.owner[id];
         path.setAttribute("fill", own ? POWER_FILL[own] : NEUTRAL_FILL);
