@@ -1423,7 +1423,7 @@ window.UI = (function () {
       const wrap = div("modal");
       wrap.appendChild(div("modal-title", "ONLINE SETUP"));
       const body = div("modal-body");
-      const repoName = (Online.repo().split("/")[1]) || "axis-games";
+      const repoName = (Online.repo().split("/")[1]) || "axis";
       body.innerHTML = `
         <div class="modal-note"><b>Invited by someone?</b> Just tap the link they texted you instead — no setup needed.</div>
         <div class="modal-note"><b>Hosting games?</b> One-time setup. Create a GitHub key that can touch
@@ -1434,8 +1434,10 @@ window.UI = (function () {
           <li>Token name: <b>${repoName}</b>. Pick an expiry.</li>
           <li><b>Repository access → Only select repositories → ${repoName}.</b>
               <u>Do NOT choose “All repositories.”</u></li>
-          <li><b>Permissions → Repository → Contents → Read and write.</b> Leave everything else “No access.”</li>
-          <li>Generate → copy the token (starts with <code>github_pat_</code>) → paste below.</li>
+          <li><b>Permissions → Repository → Contents → Read and write.</b> Leave everything else “No access.”
+              (GitHub adds “Metadata: Read-only” automatically — that's fine.)</li>
+          <li>Generate → copy the token (starts with <code>github_pat_</code>). <b>Save it in your password
+              manager under this GitHub account</b> — GitHub shows it only once — then paste it below.</li>
         </ol>
         <div class="modal-note" style="font-size:.78rem;color:var(--dim)">🔒 The app only accepts a fine-grained,
           <b>${repoName}</b>-only token. A broad or classic token is rejected — it can never end up in an invite link.</div>
