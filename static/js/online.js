@@ -8,7 +8,7 @@ window.Online = (function () {
   const CFG_KEY = "axis.online.cfg";     // {token, repo, name}
   const SEAT_KEY = "axis.online.seats";  // {gameId: "p1"|"p2"}
   const API = "https://api.github.com";
-  const DEFAULT_REPO = "Raj78789494/axis-games";
+  const DEFAULT_REPO = "Raj78789494/axis";
 
   // ---------- config ----------
   function config() {
