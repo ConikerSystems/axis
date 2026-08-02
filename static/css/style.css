@@ -24,6 +24,10 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
 .btn.close { background: var(--red); color: #fff; padding: 8px 14px; }
 .mini-btn { background: var(--panel); border: 1px solid var(--gold); color: var(--gold);
   padding: 3px 10px; border-radius: 3px; font-size: .8rem; cursor: pointer; margin-left: 8px; }
+.mini-btn.wide { display: block; width: 100%; margin: 12px 0 0; padding: 9px; font-weight: 700; letter-spacing: .04em; }
+.select-all-row { display: flex; gap: 8px; margin: 4px 0 8px; }
+.select-all-row .mini-btn { flex: 1; margin-left: 0; text-align: center; }
+.unit-label .avail { color: var(--dim); font-size: .78rem; font-style: normal; }
 .green { color: var(--green); }
 
 /* ---------- home ---------- */
@@ -167,7 +171,10 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
 .unit-tip { position: absolute; transform: translate(-50%, calc(-100% - 16px));
   background: rgba(18, 20, 24, .96); color: #f0ebdd; border: 1px solid var(--gold-dim);
   border-radius: 7px; padding: 5px 11px; font-size: .82rem; font-weight: 700; letter-spacing: .02em;
-  white-space: nowrap; pointer-events: none; z-index: 26; box-shadow: 0 5px 16px rgba(0,0,0,.55); }
+  white-space: pre-line; text-align: center; line-height: 1.35; max-width: 220px;
+  pointer-events: none; z-index: 26; box-shadow: 0 5px 16px rgba(0,0,0,.55); }
+/* first line (space name) is the tooltip heading */
+.unit-tip::first-line { color: var(--gold); }
 .unit-tip::after { content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
   border: 6px solid transparent; border-top-color: var(--gold-dim); }
 .stack-icon { pointer-events: none; }
@@ -178,8 +185,10 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
 .cargo-text { font-size: 13px; text-anchor: middle; fill: #fff; font-weight: 800; pointer-events: none; }
 .ghost-text { font-size: 20px; text-anchor: middle; fill: #fff; font-weight: 800; }
 .hi.target { fill: rgba(232, 178, 58, .38); stroke: var(--gold); stroke-width: 3; }
+.hi.attack { fill: rgba(200, 60, 45, .34); stroke: #e0503c; stroke-width: 3.4; } /* hostile destination */
 .hi.hover { fill: rgba(232, 178, 58, .6); stroke: #fff; stroke-width: 4; }
 .hi.place { fill: rgba(78, 201, 106, .4); stroke: var(--green); stroke-width: 3; }
+.sel-ring { filter: drop-shadow(0 0 4px rgba(255,255,255,.9)); } /* chosen-to-move ring */
 .dmg-text { font-size: 11px; text-anchor: middle; fill: #fff; font-weight: 800; }
 
 #banner { position: absolute; top: 10px; left: 50%; transform: translate(-50%, -80px);
