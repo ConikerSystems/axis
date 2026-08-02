@@ -1,6 +1,18 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-02 (v1.9.6)_
+_Updated: 2026-08-02 (v1.9.7)_
+
+## v1.9.7 (2026-08-02) — relay moved to a dedicated throwaway account
+- **`DEFAULT_REPO` → `Raj78789494/axis-games`** (`online.js`). The online-play relay now
+  lives on a separate, valueless GitHub account that owns *only* the games repo — so a
+  worst-case token leak (or a mis-scoped token) touches nothing of value on the main
+  `ConikerSystems` account. This is the zero-human-error guarantee from the analysis below.
+- `Online.defaultRepo` is now exported; the invite-link `&r=` check in `ui.js` compares
+  against it instead of a hardcoded string (so the relay owner only has to change in one
+  place).
+- **The host token must be created under the `Raj78789494` account**, scoped to
+  `Raj78789494/axis-games`, Contents R/W only. Online play only — local hotseat / vs-AI
+  games never touch GitHub.
 
 ## v1.9.4–1.9.6 (2026-08-02) — near-real-time multiplayer + token lockdown
 
@@ -29,8 +41,9 @@ carries their GitHub token, so the app now hard-locks what token it will store:
    Fine-grained tokens → Generate new token** (or tap "COPY GITHUB TOKEN-PAGE LINK" in
    Online Setup).
 2. Name **axis-games**, set an expiry.
-3. **Resource owner:** ConikerSystems · **Repository access → Only select repositories
-   → `axis-games`** (never "All repositories").
+3. **Resource owner:** the **Raj78789494** account · **Repository access → Only select
+   repositories → `axis-games`** (never "All repositories"). Sign into GitHub as that
+   account (not ConikerSystems) when creating the token.
 4. **Permissions → Repository → Contents → Read and write.** Everything else "No access."
 5. Generate → copy (`github_pat_…`) → paste into Online Setup.
 
@@ -46,7 +59,7 @@ carries their GitHub token, so the app now hard-locks what token it will store:
   leak — or a mis-created "All repositories" token — touches a valueless account, never
   the main one. Cost: manage one extra free account; point `DEFAULT_REPO` in `online.js`
   at `<newaccount>/axis-games`. **Recommended if you want a zero-human-error guarantee.**
-  Not yet done — say the word and I'll wire the app to it.
+  ✅ **Done in v1.9.7** — relay moved to `Raj78789494/axis-games`.
 
 ## v1.9.3 (2026-08-02) — selection & movement polish (7 features)
 1. **Selected-piece ring**: the exact stacks you chose in the move picker get a bright
