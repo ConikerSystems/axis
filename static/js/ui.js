@@ -376,6 +376,9 @@ window.UI = (function () {
     if (online && pl.type === "human" && pl.seat !== online.mySeat) return pushAndWait();
     if (pl.type === "ai") return runAITurn();
 
+    // live spectating: publish this phase's state so the waiting player watches (Option A)
+    if (online && iControl(game.current)) pushSpectate();
+
     switch (game.phase) {
       case "purchase":
         if (!game.capitalHeld(game.current)) { game.endPurchase(); return startPhase(); }
@@ -574,7 +577,7 @@ window.UI = (function () {
     const choice = await openModal("MENU", div("", `<p class="modal-note">${game ? game.title : ""}${online ? " · 🌐 " + online.id : ""}</p>`), menuBtns);
     if (choice === "exit") {
       autosave();
-      if (window.Online) Online.stopPolling();
+      if (window.Online) { Online.stopPolling(); Online.stopSpectating(); }
       online = null; // Continue re-syncs from GitHub for online games
       show("#screen-home"); refreshHome();
     }
@@ -588,7 +591,7 @@ window.UI = (function () {
         `This permanently deletes "${game.title}" from GitHub for BOTH players. There is no undo.`);
       if (!sure) return;
       try {
-        Online.stopPolling();
+        Online.stopPolling(); Online.stopSpectating();
         await Online.deleteGame(online.id);
         online = null;
         localStorage.removeItem(saveKey);
@@ -1402,7 +1405,7 @@ window.UI = (function () {
       <p>Victory cities: Axis ${game.victoryCityCount("axis")} · Allies ${game.victoryCityCount("allies")}</p></div>`);
     openModal("GAME OVER", body, [{ label: "BACK TO MENU", cls: "primary" }]).then(() => {
       localStorage.removeItem(saveKey);
-      if (window.Online) Online.stopPolling();
+      if (window.Online) { Online.stopPolling(); Online.stopSpectating(); }
       online = null;
       show("#screen-home"); refreshHome();
     });
@@ -1636,8 +1639,8 @@ window.UI = (function () {
   function enterWaiting() {
     const who = (online.seatNames && online.seatNames[otherSeat()]) || "opponent";
     const d = div("panel");
-    d.appendChild(div("panel-title", "WAITING FOR " + who.toUpperCase()));
-    d.appendChild(div("panel-sub", "Game " + online.id + " — this screen checks GitHub every 15 seconds."));
+    d.appendChild(div("panel-title", "WATCHING " + who.toUpperCase()));
+    d.appendChild(div("panel-sub", "Game " + online.id + " — the board follows " + who + "'s moves live. Your turn unlocks automatically."));
     const btn = div("btn primary", "CHECK NOW");
     btn.style.cssText = "display:block;margin:12px auto;max-width:220px;";
     btn.onclick = async () => {
@@ -1653,17 +1656,24 @@ window.UI = (function () {
     d.appendChild(inv);
     d.appendChild(div("panel-cta", "You can close the app — resume from CONTINUE any time."));
     sidePanel(d);
-    banner(`Waiting for <b>${who}</b>…`, true);
-    Online.startPolling(online.id, online.sha, onRemote);
+    banner(`Watching <b>${who}</b>…`, true);
+    Online.startSpectating(online.id, online.sha, onRemote);
   }
 
   function onRemote(g, skipRestore) {
     online.sha = g.sha;
     if (g.data.seatNames) online.seatNames = g.data.seatNames;
     if (g.data.turnSeat !== online.mySeat && !g.data.winner) {
-      Online.startPolling(online.id, online.sha, onRemote); // still their turn
+      // still the opponent's turn — mirror their in-progress board (read-only) so
+      // the waiting player watches move-by-move, and keep the spectate poller live.
+      if (!skipRestore) { game = Game.restore(g.data.snap, MAP); game.title = g.data.title; }
+      board.setGame(game); topBar();
+      const who = (online.seatNames && online.seatNames[otherSeat()]) || "opponent";
+      banner(`Watching <b>${who}</b> — ${PHASE_LABEL[g.data.phase] || ""}…`, true);
+      if (!Online.isSpectating()) Online.startSpectating(online.id, online.sha, onRemote);
       return;
     }
+    Online.stopSpectating();
     Online.stopPolling();
     if (!skipRestore) {
       game = Game.restore(g.data.snap, MAP);
@@ -1694,6 +1704,18 @@ window.UI = (function () {
       const r = await Online.putGame(online.id, data, online.sha, final ? "game over" : "sync");
       if (!r.conflict) { online.sha = r.sha; onlineOutbox = []; }
     } catch (e) { /* best effort */ }
+  }
+
+  // Option A live spectating: while it's my turn, publish the state at each phase
+  // boundary (turnSeat stays mine, so the opponent watches but can't take over)
+  // so their board tracks my progress in near real time. Best-effort — a failed
+  // spectate push never interrupts play; the authoritative handoff is pushAndWait.
+  async function pushSpectate() {
+    if (!online || !iControl(game.current)) return;
+    try {
+      const r = await Online.putGame(online.id, packOnline(), online.sha, "live: " + PHASE_LABEL[game.phase]);
+      if (r && !r.conflict && r.sha) { online.sha = r.sha; }
+    } catch (e) { /* best effort — never block the turn */ }
   }
 
   // ================= modal helpers =================

@@ -100,6 +100,8 @@ window.Online = (function () {
   }
 
   // ---------- polling ----------
+  // Turn-handoff poll: fires ONCE when the file sha changes, then stops. This is
+  // the baton model — a parked device just waits for its turn to arrive.
   let pollTimer = null;
   function startPolling(id, knownSha, onUpdate, intervalMs) {
     stopPolling();
@@ -115,6 +117,28 @@ window.Online = (function () {
   }
   function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
+  // Live-spectate poll (Option A): keeps firing for EVERY new sha, advancing the
+  // known sha internally, so the waiting player watches the active player's
+  // per-phase progress in near real time. Runs until stopSpectating(). Faster
+  // default (~4s) since it's only active while both seats are live.
+  let spectateTimer = null;
+  function startSpectating(id, knownSha, onUpdate, intervalMs) {
+    stopSpectating();
+    let last = knownSha;
+    const tick = async () => {
+      try {
+        const g = await getGame(id);
+        if (g && g.sha !== last) { last = g.sha; onUpdate(g); }
+      } catch (e) { /* transient network errors: keep polling */ }
+    };
+    spectateTimer = setInterval(tick, intervalMs || 4000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && spectateTimer) tick(); });
+    tick();
+  }
+  function stopSpectating() { if (spectateTimer) { clearInterval(spectateTimer); spectateTimer = null; } }
+  function isSpectating() { return !!spectateTimer; }
+
   return { config, saveConfig, seat, setSeat, getGame, putGame, verifyToken, newId,
-    listGames, deleteGame, startPolling, stopPolling, repo };
+    listGames, deleteGame, startPolling, stopPolling,
+    startSpectating, stopSpectating, isSpectating, repo };
 })();
