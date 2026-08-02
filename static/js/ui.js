@@ -1447,11 +1447,27 @@ window.UI = (function () {
       body.querySelector("#ol-name").value = cfg.name || "";
       body.querySelector("#ol-token").value = cfg.token || "";
       cancel.onclick = () => { ov.remove(); resolve(false); };
+      let riskyAck = false; // guardrail: require a conscious override for a broad token
       save.onclick = async () => {
         const name = body.querySelector("#ol-name").value.trim();
         const token = body.querySelector("#ol-token").value.trim();
         const st = body.querySelector("#ol-status");
         if (!name || !token) { st.textContent = "Both fields are required."; return; }
+        // Fine-grained tokens (github_pat_…) can be locked to just the games repo.
+        // Classic tokens (ghp_…) and OAuth tokens grant account-wide access, so
+        // texting an invite link built from one would hand out your whole account.
+        // Warn and force an explicit override before saving one.
+        if (!/^github_pat_/.test(token) && !riskyAck) {
+          const repoName = (Online.repo().split("/")[1]) || "axis-games";
+          st.innerHTML = `<span style="color:var(--red)">⚠ This looks like an <b>account-wide</b> token. ` +
+            `The invite link you text carries this token, so anyone who gets the link would have access ` +
+            `to your <b>whole GitHub account</b> — not just the game.<br>` +
+            `Use a <b>fine-grained</b> token limited to <b>${repoName}</b> (steps above; it starts with ` +
+            `<code>github_pat_</code>). Tap the button again to use this token anyway.</span>`;
+          riskyAck = true;
+          save.textContent = "USE IT ANYWAY";
+          return;
+        }
         Online.saveConfig({ name, token, repo: Online.repo() });
         st.textContent = "Checking the token against GitHub…";
         try { await Online.verifyToken(); ov.remove(); resolve(true); }
