@@ -394,3 +394,7 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
   .vc-flank { display: none; } .vc-label { display: none; }
   .vc-track i { width: 7px; }
 }
+
+/* Admin panel sections */
+.admin-sec { margin: 0 0 14px; }
+.admin-h { font-size: .95rem; margin: 0 0 6px; color: var(--gold); text-align: left; }
