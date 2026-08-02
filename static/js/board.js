@@ -15,6 +15,11 @@ window.Board = (function () {
   const GLYPH = { infantry: "I", artillery: "A", tank: "T", aaa: "AA", factory: "IC",
     fighter: "F", bomber: "B", submarine: "S", transport: "Tr", destroyer: "D",
     cruiser: "C", carrier: "CV", battleship: "BB" };
+  const NAME = { infantry: "Infantry", artillery: "Artillery", tank: "Tank", aaa: "Antiaircraft Gun",
+    factory: "Industrial Complex", fighter: "Fighter", bomber: "Bomber", submarine: "Submarine",
+    transport: "Transport", destroyer: "Destroyer", cruiser: "Cruiser", carrier: "Aircraft Carrier",
+    battleship: "Battleship" };
+  const POWER_LABEL = { soviet: "Soviet", germany: "German", uk: "British", japan: "Japanese", us: "US" };
 
   const NS = "http://www.w3.org/2000/svg";
   const el = (tag, attrs, parent) => {
@@ -87,6 +92,18 @@ window.Board = (function () {
     const spacePaths = {};
     let game = null;
 
+    // approximate radius of each space (from its polygon bounds) so unit stacks
+    // can spread out where there's room and stay compact on small islands.
+    const spaceExtent = {};
+    for (const [id, polys] of Object.entries(MAP.geometry)) {
+      let minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
+      for (const p of polys) for (const pt of p) {
+        if (pt[0] < minx) minx = pt[0]; if (pt[0] > maxx) maxx = pt[0];
+        if (pt[1] < miny) miny = pt[1]; if (pt[1] > maxy) maxy = pt[1];
+      }
+      spaceExtent[id] = Math.max(26, Math.min(maxx - minx, maxy - miny) / 2);
+    }
+
     // --- build static geometry ---
     // Sea zones first, land second: sea-zone polygons include their islands'
     // area, so land must always paint on top (fixes islands like Borneo being
@@ -136,12 +153,39 @@ window.Board = (function () {
     const pointers = new Map();
     let pinch = null, panning = false, drag = null, moved = false;
 
+    // --- unit identity tooltip (hover on desktop, tap on touch) ---
+    const tip = document.createElement("div");
+    tip.className = "unit-tip"; tip.style.display = "none";
+    (svg.parentNode || document.body).appendChild(tip);
+    let tipTimer = null, pendingTip = null;
+    function showTip(label, cx, cy, autohide) {
+      if (!label) return;
+      clearTimeout(tipTimer);
+      tip.textContent = label; tip.style.display = "block";
+      const wrap = (svg.parentNode || document.body).getBoundingClientRect();
+      tip.style.left = (cx - wrap.left) + "px";
+      tip.style.top = (cy - wrap.top) + "px";
+      if (autohide) tipTimer = setTimeout(hideTip, 1800);
+    }
+    function hideTip() { clearTimeout(tipTimer); tip.style.display = "none"; }
+    const stackUnder = (e) => e.target && e.target.closest && e.target.closest(".stack");
+    svg.addEventListener("mouseover", (e) => { const s = stackUnder(e); if (s) showTip(s.dataset.label, e.clientX, e.clientY, false); });
+    svg.addEventListener("mousemove", (e) => {
+      if (tip.style.display !== "block") return;
+      const s = stackUnder(e);
+      if (s) showTip(s.dataset.label, e.clientX, e.clientY, false); else hideTip();
+    });
+    svg.addEventListener("mouseleave", hideTip);
+
     let gestureStart = null; // where the finger went down — taps are judged from here
     svg.addEventListener("pointerdown", (e) => {
       svg.setPointerCapture(e.pointerId);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       gestureStart = { x: e.clientX, y: e.clientY };
       moved = false;
+      hideTip();
+      const hit = stackUnder(e);
+      pendingTip = hit ? { label: hit.dataset.label } : null; // shown on a tap (touch)
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
         pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), k: view.k,
@@ -208,6 +252,9 @@ window.Board = (function () {
     const endPointer = (e) => {
       pointers.delete(e.pointerId);
       if (pointers.size < 2) pinch = null;
+      // a tap on a piece flashes its identity tooltip (touch has no hover)
+      if (!moved && e.type === "pointerup" && pendingTip) showTip(pendingTip.label, e.clientX, e.clientY, true);
+      pendingTip = null;
       if (drag) {
         const t = spaceAt(e);
         const d = drag; drag = null;
@@ -322,16 +369,27 @@ window.Board = (function () {
         }
         const keys = Object.keys(groups);
         const perRow = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(keys.length))));
+        const rowsN = Math.ceil(keys.length / perRow);
+        const cols = Math.min(perRow, keys.length);
+        // spread stacks out where the territory has room; stay >1 chip apart (52),
+        // and cap so the block fits within ~1.7× the space's radius.
+        const R = spaceExtent[id] || 60;
+        const colSpace = Math.max(52, Math.min(72, cols > 1 ? (1.7 * R) / (cols - 1) : 72));
+        const rowSpace = Math.max(50, Math.min(64, rowsN > 1 ? (1.7 * R) / (rowsN - 1) : 64));
         keys.forEach((k, i) => {
           const gr = groups[k];
-          const col = i % perRow, row = Math.floor(i / perRow);
-          const x = c[0] + (col - (Math.min(perRow, keys.length) - 1) / 2) * 54;
-          const y = c[1] + 32 + row * 52;
+          const row = Math.floor(i / perRow), col = i % perRow;
+          const colsThisRow = Math.min(perRow, keys.length - row * perRow); // center each row
+          const x = c[0] + (col - (colsThisRow - 1) / 2) * colSpace;
+          const y = c[1] + 30 + row * rowSpace;
           const isCur = game.players && game.current === gr.power;
+          const label = `${POWER_LABEL[gr.power] || ""} ${NAME[gr.type]}${gr.n > 1 ? "  ×" + gr.n : ""}` +
+            (gr.cargo ? `  ·  ${gr.cargo} aboard` : "");
           const node = el("g", {
             class: "stack" + (isCur ? " draggable" : ""),
             transform: `translate(${x},${y})`,
             "data-space": id, "data-power": gr.power, "data-type": gr.type, "data-count": gr.n,
+            "data-label": label.trim(),
           }, gUnits);
           // generous invisible touch target so finger taps land on the piece, not the map
           el("circle", { r: 36, fill: "rgba(0,0,0,0)" }, node);

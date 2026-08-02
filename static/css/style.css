@@ -161,7 +161,15 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
 .sz-label { font-size: 30px; text-anchor: middle; fill: #5c716b; font-weight: 800; pointer-events: none; }
 .ipc-badge circle { fill: #f3ecd8; stroke: #6f6753; stroke-width: 1.4; pointer-events: none; }
 .ipc-text { font-size: 17px; text-anchor: middle; fill: #332e23; font-weight: 800; pointer-events: none; }
-.stack { cursor: grab; }
+.stack { cursor: pointer; }
+.stack.draggable { cursor: grab; }
+/* unit identity tooltip (hover on desktop, tap-flash on touch) */
+.unit-tip { position: absolute; transform: translate(-50%, calc(-100% - 16px));
+  background: rgba(18, 20, 24, .96); color: #f0ebdd; border: 1px solid var(--gold-dim);
+  border-radius: 7px; padding: 5px 11px; font-size: .82rem; font-weight: 700; letter-spacing: .02em;
+  white-space: nowrap; pointer-events: none; z-index: 26; box-shadow: 0 5px 16px rgba(0,0,0,.55); }
+.unit-tip::after { content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
+  border: 6px solid transparent; border-top-color: var(--gold-dim); }
 .stack-icon { pointer-events: none; }
 .stack-glyph { font-size: 19px; text-anchor: middle; fill: #fff; font-weight: 800; pointer-events: none; }
 .count-badge { fill: #e8b23a; stroke: #12141a; stroke-width: 2; pointer-events: none; }
