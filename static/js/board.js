@@ -185,7 +185,7 @@ window.Board = (function () {
       moved = false;
       hideTip();
       const hit = stackUnder(e);
-      pendingTip = hit ? { label: hit.dataset.label } : null; // shown on a tap (touch)
+      pendingTip = hit ? { spaceId: hit.dataset.space } : null; // full-space summary on a tap
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
         pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), k: view.k,
@@ -200,7 +200,7 @@ window.Board = (function () {
         if (info && info.targets && info.targets.length) {
           drag = { from: stack.dataset.space, power: stack.dataset.power,
             type: stack.dataset.type, targets: new Set(info.targets) };
-          highlight([...drag.targets], "target");
+          highlight([...drag.targets]); // auto-classify: hostile red, friendly gold
           const p = svgPoint(e.clientX, e.clientY);
           drawGhost(p, stack.dataset.count, stack.dataset.power);
           return;
@@ -252,8 +252,8 @@ window.Board = (function () {
     const endPointer = (e) => {
       pointers.delete(e.pointerId);
       if (pointers.size < 2) pinch = null;
-      // a tap on a piece flashes its identity tooltip (touch has no hover)
-      if (!moved && e.type === "pointerup" && pendingTip) showTip(pendingTip.label, e.clientX, e.clientY, true);
+      // a tap on a piece flashes the whole space's contents (touch has no hover)
+      if (!moved && e.type === "pointerup" && pendingTip) showTip(spaceSummary(pendingTip.spaceId), e.clientX, e.clientY, true);
       pendingTip = null;
       if (drag) {
         const t = spaceAt(e);
@@ -297,15 +297,44 @@ window.Board = (function () {
     }
 
     // --- highlights ---
+    // auto-classify a destination as an attack (hostile) vs a plain move so combat
+    // targets glow red and friendly/repositioning targets glow gold.
+    function classifyKind(id) {
+      if (!game || !game.players) return "target";
+      return (game.isHostileSpace(game.current, id) || game.hasEnemyUnits(game.current, id)) ? "attack" : "target";
+    }
     function highlight(ids, kind) {
       clearHighlight();
       for (const id of ids) {
         const src = spacePaths[id];
         if (!src) continue;
-        el("path", { d: src.getAttribute("d"), class: "hi " + (kind || "target") }, gHi);
+        const k = kind && kind !== "auto" ? kind : classifyKind(id);
+        el("path", { d: src.getAttribute("d"), class: "hi " + k }, gHi);
       }
     }
     function clearHighlight() { gHi.innerHTML = ""; }
+    // rings drawn around the currently-selected source stacks
+    let selectedSet = null;
+    function setSelected(space, types) {
+      selectedSet = (space && types && types.length) ? { space, types: new Set(types) } : null;
+      renderUnits();
+    }
+    // multi-line summary of everything in a space, for the tap tooltip
+    function spaceSummary(id) {
+      const s = MAP.spaces[id]; if (!s || !game) return "";
+      const order = [], groups = {};
+      for (const u of game.units) {
+        if (u.dead || u.space !== id || u.onTransport || u.onCarrier) continue;
+        const k = u.power + "|" + u.type;
+        if (!(k in groups)) order.push(k);
+        groups[k] = (groups[k] || 0) + 1;
+      }
+      const lines = order.map(k => {
+        const [p, t] = k.split("|");
+        return `${POWER_LABEL[p] || p} ${NAME[t]}${groups[k] > 1 ? " ×" + groups[k] : ""}`;
+      });
+      return lines.length ? s.name + "\n" + lines.join("\n") : s.name;
+    }
     let hoverEl = null;
     function hoverTarget(id) {
       if (hoverEl) { hoverEl.remove(); hoverEl = null; }
@@ -405,6 +434,13 @@ window.Board = (function () {
               transform: "scale(1.5)", "pointer-events": "none" }, node);
             ic.innerHTML = markup;
           } else el("text", { y: 5, class: "stack-glyph" }, node).textContent = GLYPH[gr.type];
+          // subtle gold ring marks the active power's movable pieces
+          if (isCur) el("circle", { r: 26, fill: "none", stroke: "#e8b23a", "stroke-width": 1.6,
+            opacity: 0.5, "pointer-events": "none" }, node);
+          // bright ring marks stacks currently chosen to move
+          if (selectedSet && selectedSet.space === id && selectedSet.types.has(gr.type))
+            el("circle", { r: 28, fill: "none", stroke: "#fff", "stroke-width": 3, class: "sel-ring",
+              "pointer-events": "none" }, node);
           if (gr.n > 1) {
             el("circle", { cx: 18, cy: 17, r: 12.5, class: "count-badge" }, node);
             el("text", { x: 18, y: 22.5, class: "count-text" }, node).textContent = gr.n;
@@ -429,7 +465,7 @@ window.Board = (function () {
     applyView();
     return {
       setGame(g) { game = g; render(); },
-      render, highlight, clearHighlight, focusSpace,
+      render, highlight, clearHighlight, focusSpace, setSelected,
       colors: POWER_COLOR, glyphs: GLYPH,
     };
   }

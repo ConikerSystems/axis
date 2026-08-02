@@ -94,6 +94,7 @@ window.UI = (function () {
     battleship: "Battleship" };
 
   let game = null, board = null, phaseSnapshot = null, saveKey = "axis.autosave";
+  let undoStack = []; // snapshots before each move action, for step-by-step undo
   // online ("Play by GitHub") context: {id, sha, mySeat, seatNames:{p1,p2}}
   let online = null, onlineOutbox = [];
   const otherSeat = () => online.mySeat === "p1" ? "p2" : "p1";
@@ -382,7 +383,7 @@ window.UI = (function () {
         openPurchasePanel();
         break;
       case "combatMove":
-        phaseSnapshot = game.snapshot();
+        phaseSnapshot = game.snapshot(); undoStack = [];
         banner("COMBAT MOVE — drag your units into hostile spaces. Tap a space for details & special orders.");
         sidePanel(moveHelpPanel(true));
         break;
@@ -390,7 +391,7 @@ window.UI = (function () {
         runCombatPhase();
         break;
       case "noncombatMove":
-        phaseSnapshot = game.snapshot();
+        phaseSnapshot = game.snapshot(); undoStack = [];
         banner("NONCOMBAT MOVE — reposition units and land your aircraft.");
         sidePanel(moveHelpPanel(false));
         break;
@@ -506,16 +507,19 @@ window.UI = (function () {
     doc.addEventListener("webkitfullscreenchange", sync);
   })();
 
+  // Undo steps back one move action at a time (down to the start of the phase).
   $("#btn-undo").addEventListener("click", () => {
-    if (phaseSnapshot && (game.phase === "combatMove" || game.phase === "noncombatMove")) {
-      const title = game.title;
-      game = Game.restore(phaseSnapshot, MAP);
-      game.title = title;
-      phaseSnapshot = game.snapshot();
-      board.setGame(game);
-      topBar();
-      banner("Moves undone — phase restarted.");
-    }
+    if (!(game.phase === "combatMove" || game.phase === "noncombatMove")) return;
+    const stepped = undoStack.length > 0;
+    const snap = stepped ? undoStack.pop() : phaseSnapshot;
+    if (!snap) return;
+    const title = game.title;
+    game = Game.restore(snap, MAP);
+    game.title = title;
+    cancelMoveSelect(true);
+    board.setGame(game);
+    topBar();
+    banner(stepped ? "Last move undone." : "Phase reset — all moves undone.");
   });
 
   // ---- country summary (📊): treasury, production, territories, VCs, forces ----
@@ -650,9 +654,29 @@ window.UI = (function () {
         <li>Transports may load & offload in friendly areas.</li>
         <li>Antiaircraft artillery may move one space now.</li>
       </ul>`));
+    if (!combat) {
+      const land = div("mini-btn wide", "✈ SHOW SAFE LANDINGS");
+      land.onclick = showLandingSpots;
+      d.appendChild(land);
+    }
     const end = div("panel-cta", `Then press <b>END PHASE</b> ↗`);
     d.appendChild(end);
     return d;
+  }
+  // Noncombat helper: highlight every friendly spot the current power's aircraft
+  // can still reach and safely land on this phase (green), so nothing is stranded.
+  function showLandingSpots() {
+    const spots = new Set();
+    let planes = 0;
+    for (const u of game.units) {
+      if (u.dead || u.power !== game.current || !UNITS[u.type].air) continue;
+      planes++;
+      for (const s of game.airLandingSpots(u)) spots.add(s.space);
+    }
+    if (!planes) { banner("No aircraft to land."); return; }
+    if (!spots.size) { banner("⚠ No safe landing spots in range — some aircraft may be lost."); return; }
+    board.highlight([...spots], "place");
+    banner("Green = places your aircraft can still reach and land safely this phase.", true);
   }
 
   // ---- purchase panel ----
@@ -922,6 +946,7 @@ window.UI = (function () {
     return rows;
   }
   function performMoves(rows, to, power) {
+    if (rows.some(r => r.take > 0)) undoStack.push(game.snapshot()); // one undo step per move action
     for (const r of rows) {
       let n = r.take;
       for (const u of r.eligible) {
@@ -981,11 +1006,19 @@ window.UI = (function () {
 
     const body = div("");
     body.appendChild(div("modal-note", "Choose which pieces to move, then tap a highlighted space on the map."));
+    const nums = [];
+    const syncNums = () => nums.forEach(({ t, node }) => node.textContent = takes[t]);
+    const allRow = div("select-all-row");
+    allRow.innerHTML = `<button class="mini-btn" data-a="all">SELECT ALL</button><button class="mini-btn" data-a="none">CLEAR</button>`;
+    allRow.querySelector('[data-a="all"]').onclick = () => { for (const t of types) takes[t] = groups[t].length; syncNums(); };
+    allRow.querySelector('[data-a="none"]').onclick = () => { for (const t of types) takes[t] = 0; syncNums(); };
+    body.appendChild(allRow);
     for (const t of types) {
       const row = div("unit-row");
-      row.innerHTML = `<div class="unit-label">${chipHtml(t, power)} ${UNIT_NAME[t].toUpperCase()}</div>
+      row.innerHTML = `<div class="unit-label">${chipHtml(t, power)} ${UNIT_NAME[t].toUpperCase()} <em class="avail">of ${groups[t].length}</em></div>
         <div class="unit-stats"><span class="stepper"><button class="minus">−</button><b>${takes[t]}</b><button class="plus">+</button></span></div>`;
       const num = row.querySelector("b");
+      nums.push({ t, node: num });
       row.querySelector(".plus").onclick = () => { takes[t] = Math.min(groups[t].length, takes[t] + 1); num.textContent = takes[t]; };
       row.querySelector(".minus").onclick = () => { takes[t] = Math.max(0, takes[t] - 1); num.textContent = takes[t]; };
       body.appendChild(row);
@@ -998,7 +1031,8 @@ window.UI = (function () {
       const targets = selectionTargets(from, power, takes);
       if (!targets.size) { banner("Those units have no legal moves."); return; }
       moveSelect = { from, power, takes, targets };
-      board.highlight([...targets], "target");
+      board.setSelected(from, types.filter(t => takes[t] > 0)); // ring the chosen stacks
+      board.highlight([...targets]); // auto: hostile red, friendly gold
       banner(`Tap a highlighted space to ${game.phase === "combatMove" ? "move / attack" : "move"} — tap anywhere else to cancel.`, true);
     });
   }
@@ -1036,6 +1070,7 @@ window.UI = (function () {
     if (!moveSelect) return;
     moveSelect = null;
     board.clearHighlight();
+    board.setSelected(null);
     banner(null);
     if (!silent) banner("Move cancelled.");
   }
@@ -1043,7 +1078,7 @@ window.UI = (function () {
   function executeMoveSelect(to) {
     const { from, power, takes } = moveSelect;
     moveSelect = null;
-    board.clearHighlight(); banner(null);
+    board.clearHighlight(); board.setSelected(null); banner(null);
     const rows = rowsFor(from, to, power);
     for (const r of rows) r.take = Math.min(takes[r.type] || 0, r.eligible.length);
     performMoves(rows.filter(r => r.take > 0), to, power);

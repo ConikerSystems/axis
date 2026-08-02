@@ -1,6 +1,26 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-02 (v1.9.2)_
+_Updated: 2026-08-02 (v1.9.3)_
+
+## v1.9.3 (2026-08-02) — selection & movement polish (7 features)
+1. **Selected-piece ring**: the exact stacks you chose in the move picker get a bright
+   white ring while you pick a destination. (`board.setSelected`)
+2. **Active-power ring**: the current power's movable pieces wear a subtle gold ring, so
+   "what can I move" is obvious at a glance.
+3. **Multi-unit tap tooltip**: tapping a space now flashes the whole space's contents
+   (name + every unit group), not just one type. Hover still shows the single stack.
+4. **Select all / Clear** buttons in the move picker (with "of N" available counts).
+5. **Attack vs move colors**: hostile destinations highlight **red**, friendly/reposition
+   destinations **gold** — auto-classified in `board.highlight`. Applies to drag and tap.
+6. **Step-by-step undo**: ↩ now undoes one move action at a time (snapshot stack) down to
+   the start of the phase, instead of only a full-phase reset.
+7. **✈ Show safe landings**: a noncombat button highlights (green) every friendly spot the
+   current power's aircraft can still reach and land on this phase.
+- Pure view change (`board.js`, `ui.js`, `style.css`); 44 engine tests + smoke pass.
+- Version `1.9.2 → 1.9.3`; `sw.js` cache `axis-v16 → axis-v17`.
+- Added **MULTIPLAYER-EVAL.md** (analysis only, not built): options for real-time 2-player
+  play — improve GitHub polling (serverless) vs Supabase/Firebase realtime vs WebRTC/self-host.
+
 
 ## v1.9.2 (2026-08-02) — piece tooltips + roomier stacks
 - **Unit identity tooltip**: hovering a piece (desktop) or tapping it (touch) pops a label
