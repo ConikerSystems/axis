@@ -1,6 +1,52 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-02 (v1.9.3)_
+_Updated: 2026-08-02 (v1.9.6)_
+
+## v1.9.4–1.9.6 (2026-08-02) — near-real-time multiplayer + token lockdown
+
+**v1.9.4 — live spectating (Option A from MULTIPLAYER-EVAL).** Two-player "Play by
+GitHub" now feels near-live over the existing relay, no new infra:
+- `online.js`: `startSpectating`/`stopSpectating`/`isSpectating` — a continuous ~4s
+  poller that fires for **every** new file sha (advances the known sha internally),
+  alongside the unchanged turn-handoff `startPolling`.
+- `ui.js`: the active player publishes a snapshot at **each phase boundary**
+  (`pushSpectate`; `turnSeat` stays theirs), and the old "WAITING" screen became
+  "WATCHING" — it mirrors the opponent's in-progress board move-by-move and
+  auto-unlocks when the baton (`turnSeat`) flips. CAS on the file sha unchanged.
+
+**v1.9.5–1.9.6 — token can never expose the account.** The invite link a host texts
+carries their GitHub token, so the app now hard-locks what token it will store:
+- **Only fine-grained tokens** (`github_pat_…`) are accepted. Classic/OAuth tokens
+  (`ghp_…`, account-wide) are **rejected outright — no override** (`openOnlineSetup`).
+- **Server-confirmed** defense in depth: `Online.tokenScopes()` reads GitHub's
+  `X-OAuth-Scopes` header; if the token reports any account-wide (classic) scopes it's
+  refused and the bad token is cleared from storage.
+- Online Setup now shows the **full numbered token steps** in-app (repo-only, contents
+  R/W only, "do NOT choose All repositories").
+
+### How to make the host token (give this to anyone hosting)
+1. GitHub → avatar → **Settings → Developer settings → Personal access tokens →
+   Fine-grained tokens → Generate new token** (or tap "COPY GITHUB TOKEN-PAGE LINK" in
+   Online Setup).
+2. Name **axis-games**, set an expiry.
+3. **Resource owner:** ConikerSystems · **Repository access → Only select repositories
+   → `axis-games`** (never "All repositories").
+4. **Permissions → Repository → Contents → Read and write.** Everything else "No access."
+5. Generate → copy (`github_pat_…`) → paste into Online Setup.
+
+### Security analysis — separate repo vs separate account (requested)
+- **The real lock is GitHub's server-side token scoping.** A fine-grained token limited
+  to `axis-games` + Contents-only literally cannot read/write any other repo, or touch
+  settings/billing/secrets/repo-deletion. GitHub enforces this — not our code.
+- **A separate *repo* (same account) adds NO security** when the token is fine-grained
+  and repo-scoped: such a token already can't see any other repo. It would only matter
+  against a broad token, which the app now refuses anyway.
+- **A separate *account* is the only thing that adds isolation.** A throwaway free GitHub
+  account (e.g. `coniker-games`) that owns *only* `axis-games` means even a worst-case
+  leak — or a mis-created "All repositories" token — touches a valueless account, never
+  the main one. Cost: manage one extra free account; point `DEFAULT_REPO` in `online.js`
+  at `<newaccount>/axis-games`. **Recommended if you want a zero-human-error guarantee.**
+  Not yet done — say the word and I'll wire the app to it.
 
 ## v1.9.3 (2026-08-02) — selection & movement polish (7 features)
 1. **Selected-piece ring**: the exact stacks you chose in the move picker get a bright

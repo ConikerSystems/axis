@@ -76,6 +76,29 @@ window.Online = (function () {
     if (r.notFound) throw new Error("Token works but cannot see " + repo());
     return true;
   }
+  // Inspect what the token is allowed to do. GitHub returns granted scopes in the
+  // X-OAuth-Scopes response header for CLASSIC / OAuth tokens (which are
+  // account-wide); fine-grained tokens omit that header entirely. We use this as
+  // a server-confirmed check that the token isn't a broad, account-wide one.
+  // Returns { ok, status, fineGrained, scopes }.
+  async function tokenScopes() {
+    const cfg = config();
+    if (!cfg || !cfg.token) throw new Error("Online play is not set up (no token)");
+    const res = await fetch(API + `/repos/${repo()}`, {
+      headers: {
+        "Authorization": "Bearer " + cfg.token,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    });
+    if (res.status === 401) throw new Error("GitHub rejected the token — re-enter it in Online Setup");
+    const raw = (res.headers && res.headers.get) ? res.headers.get("X-OAuth-Scopes") : null;
+    return {
+      ok: res.ok, status: res.status,
+      fineGrained: raw === null,        // header absent → fine-grained PAT
+      scopes: (raw || "").trim(),       // non-empty → account-wide classic scopes
+    };
+  }
   // list all game ids on the relay
   async function listGames() {
     const r = await gh(`/repos/${repo()}/contents/games?_=` + Date.now());
@@ -138,7 +161,7 @@ window.Online = (function () {
   function stopSpectating() { if (spectateTimer) { clearInterval(spectateTimer); spectateTimer = null; } }
   function isSpectating() { return !!spectateTimer; }
 
-  return { config, saveConfig, seat, setSeat, getGame, putGame, verifyToken, newId,
+  return { config, saveConfig, seat, setSeat, getGame, putGame, verifyToken, tokenScopes, newId,
     listGames, deleteGame, startPolling, stopPolling,
     startSpectating, stopSpectating, isSpectating, repo };
 })();

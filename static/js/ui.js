@@ -1423,13 +1423,22 @@ window.UI = (function () {
       const wrap = div("modal");
       wrap.appendChild(div("modal-title", "ONLINE SETUP"));
       const body = div("modal-body");
+      const repoName = (Online.repo().split("/")[1]) || "axis-games";
       body.innerHTML = `
-        <div class="modal-note"><b>Invited by someone?</b> Just tap the link they texted you instead — no setup needed.<br><br>
-          <b>Hosting games?</b> One-time setup: create an access key on GitHub and paste it below.
-          It only unlocks the games repo (<b>${Online.repo()}</b>), nothing else.</div>
-        <div class="btn" id="ol-helper" style="display:block;margin:4px auto 10px;max-width:320px;">📋 COPY GITHUB TOKEN-PAGE LINK</div>
-        <div class="modal-note" style="font-size:.82rem">Open that link in Safari → name it <b>axis</b> → Only select repositories →
-          <b>axis-games</b> → Permissions → Contents: <b>Read and write</b> → Generate → copy → paste here.</div>
+        <div class="modal-note"><b>Invited by someone?</b> Just tap the link they texted you instead — no setup needed.</div>
+        <div class="modal-note"><b>Hosting games?</b> One-time setup. Create a GitHub key that can touch
+          <b>only</b> the games repo (<b>${Online.repo()}</b>) — never the rest of your account:</div>
+        <div class="btn" id="ol-helper" style="display:block;margin:4px auto 8px;max-width:320px;">📋 COPY GITHUB TOKEN-PAGE LINK</div>
+        <ol style="text-align:left;font-size:.82rem;margin:4px auto 8px;max-width:340px;line-height:1.5;padding-left:20px">
+          <li>Open the link in Safari (sign in to GitHub if asked).</li>
+          <li>Token name: <b>${repoName}</b>. Pick an expiry.</li>
+          <li><b>Repository access → Only select repositories → ${repoName}.</b>
+              <u>Do NOT choose “All repositories.”</u></li>
+          <li><b>Permissions → Repository → Contents → Read and write.</b> Leave everything else “No access.”</li>
+          <li>Generate → copy the token (starts with <code>github_pat_</code>) → paste below.</li>
+        </ol>
+        <div class="modal-note" style="font-size:.78rem;color:var(--dim)">🔒 The app only accepts a fine-grained,
+          <b>${repoName}</b>-only token. A broad or classic token is rejected — it can never end up in an invite link.</div>
         <input id="ol-name" class="ol-input" type="text" maxlength="14" placeholder="YOUR NAME (e.g. JOE)">
         <input id="ol-token" class="ol-input" type="password" placeholder="GITHUB TOKEN (github_pat_…)">
         <div class="modal-note" id="ol-status"></div>`;
@@ -1447,31 +1456,35 @@ window.UI = (function () {
       body.querySelector("#ol-name").value = cfg.name || "";
       body.querySelector("#ol-token").value = cfg.token || "";
       cancel.onclick = () => { ov.remove(); resolve(false); };
-      let riskyAck = false; // guardrail: require a conscious override for a broad token
+      const fail = (st, msg) => { st.innerHTML = `<span style="color:var(--red)">✗ ${msg}</span>`; };
       save.onclick = async () => {
         const name = body.querySelector("#ol-name").value.trim();
         const token = body.querySelector("#ol-token").value.trim();
         const st = body.querySelector("#ol-status");
         if (!name || !token) { st.textContent = "Both fields are required."; return; }
-        // Fine-grained tokens (github_pat_…) can be locked to just the games repo.
-        // Classic tokens (ghp_…) and OAuth tokens grant account-wide access, so
-        // texting an invite link built from one would hand out your whole account.
-        // Warn and force an explicit override before saving one.
-        if (!/^github_pat_/.test(token) && !riskyAck) {
-          const repoName = (Online.repo().split("/")[1]) || "axis-games";
-          st.innerHTML = `<span style="color:var(--red)">⚠ This looks like an <b>account-wide</b> token. ` +
-            `The invite link you text carries this token, so anyone who gets the link would have access ` +
-            `to your <b>whole GitHub account</b> — not just the game.<br>` +
-            `Use a <b>fine-grained</b> token limited to <b>${repoName}</b> (steps above; it starts with ` +
-            `<code>github_pat_</code>). Tap the button again to use this token anyway.</span>`;
-          riskyAck = true;
-          save.textContent = "USE IT ANYWAY";
-          return;
+        // HARD LOCK — the app will only ever store a fine-grained token. Classic
+        // (ghp_…) / OAuth tokens are account-wide and would leak the whole account
+        // through the invite link, so they are rejected outright (no override).
+        if (!/^github_pat_/.test(token)) {
+          return fail(st, `Blocked — that isn't a fine-grained token. A classic token can reach your ` +
+            `<b>whole GitHub account</b>, so the app won't use it. Create a fine-grained token limited to ` +
+            `<b>${repoName}</b> (it starts with <code>github_pat_</code>) using the steps above.`);
         }
-        Online.saveConfig({ name, token, repo: Online.repo() });
         st.textContent = "Checking the token against GitHub…";
-        try { await Online.verifyToken(); ov.remove(); resolve(true); }
-        catch (e) { st.textContent = "✗ " + e.message; }
+        Online.saveConfig({ name, token, repo: Online.repo() });
+        const clearBad = () => Online.saveConfig({ name, token: "", repo: Online.repo() });
+        try {
+          // Server-confirmed defense in depth: reject anything GitHub reports as
+          // carrying account-wide (classic) scopes.
+          const info = await Online.tokenScopes();
+          if (!info.fineGrained || info.scopes) {
+            clearBad();
+            return fail(st, `Blocked — GitHub reports this token has account-wide access` +
+              `${info.scopes ? " (" + info.scopes + ")" : ""}. Use a fine-grained token limited to <b>${repoName}</b>.`);
+          }
+          await Online.verifyToken();     // confirms it can actually reach the games repo
+          ov.remove(); resolve(true);
+        } catch (e) { clearBad(); fail(st, e.message); }
       };
     });
   }
