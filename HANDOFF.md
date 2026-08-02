@@ -14,6 +14,18 @@ _Updated: 2026-08-02 (v1.9.7)_
   `Raj78789494/axis`, Contents R/W only. Online play only — local hotseat / vs-AI
   games never touch GitHub.
 
+### Online-play setup — recorded facts (for future sessions)
+- **Relay repo:** `Raj78789494/axis` (private) on Joe's dedicated/throwaway GitHub
+  account — holds only `games/<id>.json`, nothing of value.
+- **Host token:** fine-grained PAT named **`axis_multiplayer`**, made under the
+  `Raj78789494` account, scoped to that one repo. Permissions: **Contents: Read and
+  write** + **Metadata: Read-only** (auto). Nothing else.
+- **Token expires: 2027-08-02.** ⏰ Before then, regenerate a new fine-grained token the
+  same way and re-paste it into the app's Online Setup, or online play stops (the app
+  will reject the expired token with a 401). Local games are unaffected.
+- The token value is **never** stored in this repo — it lives only in Joe's password
+  manager and in `localStorage` on the host device. Do not commit it anywhere.
+
 ## v1.9.4–1.9.6 (2026-08-02) — near-real-time multiplayer + token lockdown
 
 **v1.9.4 — live spectating (Option A from MULTIPLAYER-EVAL).** Two-player "Play by
