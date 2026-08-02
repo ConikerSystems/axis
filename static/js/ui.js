@@ -1430,7 +1430,8 @@ window.UI = (function () {
           <b>only</b> the games repo (<b>${Online.repo()}</b>) — never the rest of your account:</div>
         <div class="btn" id="ol-helper" style="display:block;margin:4px auto 8px;max-width:320px;">📋 COPY GITHUB TOKEN-PAGE LINK</div>
         <ol style="text-align:left;font-size:.82rem;margin:4px auto 8px;max-width:340px;line-height:1.5;padding-left:20px">
-          <li>Open the link in Safari (sign in to GitHub if asked).</li>
+          <li>Open <code style="word-break:break-all">github.com/settings/personal-access-tokens/new</code>
+              in Safari (tap COPY above), signed in as the <b>relay</b> account.</li>
           <li>Token name: <b>${repoName}</b>. Pick an expiry.</li>
           <li><b>Repository access → Only select repositories → ${repoName}.</b>
               <u>Do NOT choose “All repositories.”</u></li>
@@ -1779,6 +1780,51 @@ window.UI = (function () {
   }
   const pause = (ms) => new Promise(r => setTimeout(r, ms));
 
+  // ================= admin =================
+  // Admin/reference panel. Explains the behind-the-scenes online-play plumbing
+  // (so it's documented in the app itself) and will host experimental feature
+  // toggles like the USA Super Bomber once its rules are defined.
+  const TOKEN_PAGE_URL = "https://github.com/settings/personal-access-tokens/new";
+  const TOKEN_EXPIRES = "August 2, 2027"; // the axis_multiplayer fine-grained token
+  function openAdminPanel() {
+    const body = div("");
+    body.innerHTML = `
+      <div class="admin-sec">
+        <h3 class="admin-h">🌐 Online multiplayer — how it works</h3>
+        <div class="modal-note" style="text-align:left">
+          <b>Solo (vs computer)</b> and <b>hotseat</b> (two people, one device) are
+          <b>100% local</b> — no internet or GitHub, ever.<br><br>
+          <b>Online play</b> (two people, two devices) needs a way to pass the game between
+          phones. Axis uses one <b>tiny private GitHub repo as a mailbox</b>:
+          <b>${Online.repo()}</b>. Each turn writes a small JSON file; the other device reads
+          it. That repo is the <u>only</u> thing the extra GitHub account does.<br><br>
+          You never touch GitHub to play — the app reads/writes it invisibly using the token
+          you saved. That repo/account is <b>not the game and not a separate app</b>; it holds
+          <b>no code</b>, just game-state files. It is <b>not a Claude Hub app</b> — just
+          behind-the-scenes storage for multiplayer. (The Axis game itself is the app you're
+          in now.)
+        </div>
+        <div class="modal-note" style="text-align:left;font-size:.82rem;color:var(--dim)">
+          Relay repo: <b>${Online.repo()}</b> · token <b>axis_multiplayer</b> · expires
+          <b>${TOKEN_EXPIRES}</b>.<br>
+          Regenerate a token (sign in as the relay account first):<br>
+          <code style="word-break:break-all">${TOKEN_PAGE_URL}</code>
+        </div>
+      </div>
+      <div class="admin-sec">
+        <h3 class="admin-h">🧪 Experimental features</h3>
+        <div class="modal-note" style="text-align:left">
+          <b>🛩 USA Super Bomber</b> — <i>coming soon (rules being defined).</i> Once added,
+          it toggles here and, when on, becomes available to the <b>USA</b> during game setup
+          for both hotseat and online games.
+        </div>
+      </div>`;
+    return openModal("⚙ ADMIN", body, [
+      { label: "OPEN ONLINE SETUP", value: "setup" },
+      { label: "CLOSE", cls: "primary", value: "close" },
+    ]).then((v) => { if (v === "setup") openOnlineSetup(); });
+  }
+
   // ================= home =================
   function refreshHome() {
     const has = !!localStorage.getItem(saveKey);
@@ -1810,6 +1856,7 @@ window.UI = (function () {
     $("#btn-continue").onclick = () => loadAutosave();
     $("#btn-online-new").onclick = openOnlineCreate;
     $("#btn-online-join").onclick = openOnlineGames;
+    $("#btn-admin").onclick = openAdminPanel;
     $("#btn-edit-territories").onclick = openTerritoryEditor;
     $("#custom-territories").addEventListener("change", (e) => {
       $("#btn-edit-territories").style.display = e.target.checked ? "" : "none";
