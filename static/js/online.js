@@ -8,7 +8,7 @@ window.Online = (function () {
   const CFG_KEY = "axis.online.cfg";     // {token, repo, name}
   const SEAT_KEY = "axis.online.seats";  // {gameId: "p1"|"p2"}
   const API = "https://api.github.com";
-  const DEFAULT_REPO = "ConikerSystems/axis-games";
+  const DEFAULT_REPO = "Raj78789494/axis-games";
 
   // ---------- config ----------
   function config() {
@@ -163,5 +163,5 @@ window.Online = (function () {
 
   return { config, saveConfig, seat, setSeat, getGame, putGame, verifyToken, tokenScopes, newId,
     listGames, deleteGame, startPolling, stopPolling,
-    startSpectating, stopSpectating, isSpectating, repo };
+    startSpectating, stopSpectating, isSpectating, repo, defaultRepo: DEFAULT_REPO };
 })();

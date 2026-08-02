@@ -1597,7 +1597,7 @@ window.UI = (function () {
     const cfg = Online.config() || {};
     let link = location.origin + location.pathname + "#join=" + online.id +
       "&k=" + encodeURIComponent(cfg.token || "");
-    if (cfg.repo && cfg.repo !== "ConikerSystems/axis-games") link += "&r=" + encodeURIComponent(cfg.repo);
+    if (cfg.repo && cfg.repo !== Online.defaultRepo) link += "&r=" + encodeURIComponent(cfg.repo);
     return link;
   }
   async function shareInvite() {
