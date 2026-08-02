@@ -1,6 +1,23 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-01 (v1.9.1)_
+_Updated: 2026-08-02 (v1.9.2)_
+
+## v1.9.2 (2026-08-02) — piece tooltips + roomier stacks
+- **Unit identity tooltip**: hovering a piece (desktop) or tapping it (touch) pops a label
+  with the power, unit name, and count — e.g. "Soviet Infantry ×4" (transports/carriers
+  also show "· N aboard"). `board.js`: `NAME`/`POWER_LABEL` maps, a `.unit-tip` overlay,
+  and `data-label` on each stack; hover via mouseover/mousemove, tap-flash via the pointer
+  end handler (auto-hides after 1.8 s). CSS `.unit-tip`.
+- **Roomier stacks**: unit stacks now spread out using each territory's polygon radius
+  (`spaceExtent`) — up to ~72 px apart where there's room, floored at ~52 px so chips never
+  overlap, and each row is centered. Big territories (Russia, Africa) breathe; small islands
+  stay compact. Replaces the old fixed 54 px grid. `board.js` `renderUnits`.
+- **Rules re-verified**, incl. transports: combat-move load counts as the land unit's whole
+  move; offloading onto a hostile coast in combat move declares an amphibious assault from
+  the transport's zone (cargo lands only if the transport survives there); noncombat offload
+  delivers into a friendly coast. Engine + combat unchanged; 44 engine tests + smoke pass.
+- Version `1.9.1 → 1.9.2`; `sw.js` cache `axis-v15 → axis-v16`.
+
 
 ## v1.9.1 (2026-08-01) — rules fix + label polish
 - **Strategic bombing AA corrected (rules)**: a bombing raid only draws antiaircraft
