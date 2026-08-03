@@ -125,9 +125,12 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
 #board { width: 100%; height: 100%; display: block; touch-action: none; }
 /* on-screen zoom + pan controls (left edge) — reliable on touch, complements pinch.
    Zoom (magnifier +/-) is a separate group from the bigger 4-way pan pad. */
-.board-ctrls { position: absolute; left: 6px; top: 50%; transform: translateY(-50%);
-  z-index: 15; display: flex; flex-direction: column; align-items: center; gap: 12px; user-select: none;
-  touch-action: none; }
+.board-ctrls { position: absolute; z-index: 15; display: flex; flex-direction: column;
+  align-items: center; gap: 12px; user-select: none; touch-action: none; }
+/* defaults: zoom bottom-left (above the phase card); pan bottom-right of the visible
+   map — just left of the side panel so it isn't hidden behind it. Both are draggable. */
+.zoom-ctrls { left: 12px; bottom: 92px; }
+.pan-ctrls { right: 358px; bottom: 14px; }
 .bc-grip { align-self: stretch; height: 22px; display: flex; align-items: center; justify-content: center;
   color: var(--gold); font-size: 1rem; letter-spacing: 3px; cursor: move; touch-action: none;
   background: rgba(20,22,26,.62); border: 1px solid var(--gold-dim); border-radius: 8px;
