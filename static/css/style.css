@@ -213,9 +213,18 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
 .cargo-text { font-size: 13px; text-anchor: middle; fill: #fff; font-weight: 800; pointer-events: none; }
 .ghost-text { font-size: 20px; text-anchor: middle; fill: #fff; font-weight: 800; }
 .hi.target { fill: rgba(232, 178, 58, .38); stroke: var(--gold); stroke-width: 3; }
-.hi.attack { fill: rgba(200, 60, 45, .34); stroke: #e0503c; stroke-width: 3.4; } /* hostile destination */
+.hi.attack { fill: rgba(200, 60, 45, .40); stroke: #ff5a42; stroke-width: 4; } /* hostile destination */
 .hi.hover { fill: rgba(232, 178, 58, .6); stroke: #fff; stroke-width: 4; }
 .hi.place { fill: rgba(78, 201, 106, .4); stroke: var(--green); stroke-width: 3; }
+/* pulsing target badges so small/island destinations are obvious */
+@keyframes hiPulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+.hi.attack, .hi.target, .hi.place { animation: hiPulse 1.2s ease-in-out infinite; }
+.hi-badge { pointer-events: none; animation: hiPulse 1.2s ease-in-out infinite; }
+.hi-badge-bg { stroke-width: 2.2; }
+.hi-badge-bg.attack { fill: rgba(196, 40, 30, .95); stroke: #ffc4b7; }
+.hi-badge-bg.target { fill: rgba(168, 126, 34, .95); stroke: #ffe9a8; }
+.hi-badge-bg.place { fill: rgba(38, 140, 66, .95); stroke: #b6f0c4; }
+.hi-badge-tx { text-anchor: middle; font-size: 17px; fill: #fff; font-weight: 800; }
 .sel-ring { filter: drop-shadow(0 0 4px rgba(255,255,255,.9)); } /* chosen-to-move ring */
 .dmg-text { font-size: 11px; text-anchor: middle; fill: #fff; font-weight: 800; }
 

@@ -382,6 +382,15 @@ window.Board = (function () {
         if (!src) continue;
         const k = kind && kind !== "auto" ? kind : classifyKind(id);
         el("path", { d: src.getAttribute("d"), class: "hi " + k }, gHi);
+        // a pulsing badge at the territory center so small/island targets (e.g.
+        // Japan, sitting between sea zones) are unmistakable as valid destinations
+        const c = MAP.centers[id];
+        if (c) {
+          const badge = el("g", { class: "hi-badge", transform: `translate(${c[0]},${c[1]})` }, gHi);
+          el("circle", { r: 15, class: "hi-badge-bg " + k }, badge);
+          const tx = el("text", { class: "hi-badge-tx", x: 0, y: 6 }, badge);
+          tx.textContent = k === "attack" ? "⚔" : k === "place" ? "+" : "→";
+        }
       }
     }
     function clearHighlight() { gHi.innerHTML = ""; }
