@@ -225,6 +225,17 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
   text-align: center; pointer-events: none; }
 #banner.show { transform: translate(-50%, 0); }
 #banner b { color: var(--gold); }
+/* phase transition notice — brief centered card announcing the new phase */
+.phase-toast { position: absolute; top: 78px; left: 50%; transform: translate(-50%, -14px);
+  z-index: 40; display: flex; align-items: center; gap: 11px; pointer-events: none;
+  background: rgba(16, 18, 22, .94); border: 1px solid var(--gold-dim); border-radius: 12px;
+  padding: 10px 20px; box-shadow: 0 12px 34px rgba(0,0,0,.55);
+  opacity: 0; transition: opacity .28s ease, transform .28s ease; }
+.phase-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.phase-toast .pt-emblem { font-size: 1.35rem; line-height: 1; }
+.phase-toast .pt-power { color: var(--dim); font-weight: 700; letter-spacing: .06em; font-size: .82rem; }
+.phase-toast .pt-phase { color: var(--gold); font-weight: 800; letter-spacing: .12em;
+  font-size: 1.12rem; text-transform: uppercase; }
 
 /* live feed of computer actions during AI turns */
 #ai-feed { position: absolute; left: 10px; top: 56px; z-index: 24; display: flex;
