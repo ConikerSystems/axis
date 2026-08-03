@@ -217,7 +217,16 @@
             // air moves anywhere except neutral/impassable territories
             if (!ns.sea && ns.impassable) continue;
             seen.set(nb, cost);
-            res.set(nb, { cost });
+            if (combat) {
+              // combat move: an aircraft may only END on a hostile space (an attack),
+              // and only if it can still reach a friendly landing spot afterwards.
+              const hostile = this.isHostileSpace(power, nb) || this.hasEnemyUnits(power, nb);
+              const canLand = hostile &&
+                (typeof this.airCanLandAfter === "function" ? this.airCanLandAfter(u, nb, cost) : true);
+              res.set(nb, { cost, hostile, endOk: hostile && canLand });
+            } else {
+              res.set(nb, { cost });
+            }
             frontier.push({ at: nb, used: cost });
             continue;
           }
