@@ -402,10 +402,13 @@ window.Board = (function () {
     }
     function highlight(ids, kind) {
       clearHighlight();
-      for (const id of ids) {
+      for (const item of ids) {
+        // each entry may be a plain id (uses `kind`) or {id, kind} for a per-item colour
+        const id = typeof item === "string" ? item : item.id;
+        const itemKind = (item && typeof item === "object") ? item.kind : null;
         const src = spacePaths[id];
         if (!src) continue;
-        const k = kind && kind !== "auto" ? kind : classifyKind(id);
+        const k = itemKind || (kind && kind !== "auto" ? kind : classifyKind(id));
         el("path", { d: src.getAttribute("d"), class: "hi " + k }, gHi);
         // a pulsing badge at the territory center so small/island targets (e.g.
         // Japan, sitting between sea zones) are unmistakable as valid destinations

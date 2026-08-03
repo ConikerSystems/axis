@@ -434,8 +434,11 @@ window.UI = (function () {
         break;
       case "noncombatMove":
         phaseSnapshot = game.snapshot(); undoStack = [];
-        banner("NONCOMBAT MOVE — reposition units and land your aircraft.");
         sidePanel(moveHelpPanel(false));
+        if (game.strandedAir().length) {
+          highlightStrandedAir();
+          banner("NONCOMBAT MOVE — ✈ aircraft on the red spaces must land. Drag each to a green landing spot before ending the phase.", true);
+        } else banner("NONCOMBAT MOVE — reposition units and land your aircraft.");
         break;
       case "mobilize": {
         if (!game.purchases.some(p => p.qty > 0)) { game.endMobilize(); return startPhase(); }
@@ -487,8 +490,16 @@ window.UI = (function () {
       case "noncombatMove": {
         const stranded = game.strandedAir();
         if (stranded.length) {
+          const canLand = stranded.filter(u => game.airLandingSpots(u).length > 0);
+          if (canLand.length) {
+            // BLOCK: these planes can still reach safety, so they must land first
+            highlightStrandedAir();
+            banner(`⚠ ${canLand.length} aircraft still need to land. Drag each plane on a red space to a green landing spot — non-combat can't end until they're safe.`, true);
+            return;
+          }
+          // only truly stuck planes remain (e.g. their carrier sank) — allow the crash
           const okGo = await confirmModal("AIRCRAFT WILL BE LOST",
-            `${stranded.length} aircraft (${stranded.map(u => UNIT_NAME[u.type]).join(", ")}) have no legal landing space and will crash. Continue?`);
+            `${stranded.length} aircraft (${stranded.map(u => UNIT_NAME[u.type]).join(", ")}) have NO reachable landing space and will crash. Continue?`);
           if (!okGo) return;
         }
         game.endNoncombatMove(); break;
@@ -729,6 +740,25 @@ window.UI = (function () {
     if (!spots.size) { banner("⚠ No safe landing spots in range — some aircraft may be lost."); return; }
     board.highlight([...spots], "place");
     banner("Green = places your aircraft can still reach and land safely this phase.", true);
+  }
+  // Highlight aircraft that still need to land (red on the plane's space) together with the
+  // green spots each can reach. Returns how many stranded planes can still reach safety.
+  function highlightStrandedAir() {
+    const stranded = game.strandedAir();
+    if (!stranded.length) { board.clearHighlight(); return 0; }
+    const spots = new Set(), planeSpaces = new Set();
+    let canLand = 0;
+    for (const u of stranded) {
+      const reach = game.airLandingSpots(u);
+      if (reach.length) canLand++;
+      planeSpaces.add(u.space);
+      for (const s of reach) spots.add(s.space);
+    }
+    const items = [];
+    for (const id of spots) items.push({ id, kind: "place" });               // green = land here
+    for (const id of planeSpaces) if (!spots.has(id)) items.push({ id, kind: "attack" }); // red = plane stuck here
+    board.highlight(items);
+    return canLand;
   }
 
   // ---- purchase panel ----
@@ -1130,6 +1160,13 @@ window.UI = (function () {
     if (game.phase === "combatMove" && !toSpace.sea &&
       confirmed.some(r => r.mode === "offload")) banner("Amphibious assault declared on " + toSpace.name);
     maybeBomberMission(to, confirmed);
+    refreshNoncombatAir();
+  }
+  // keep the "aircraft still to land" highlight current after each noncombat move
+  function refreshNoncombatAir() {
+    if (game.phase !== "noncombatMove") return;
+    if (game.strandedAir().length) highlightStrandedAir();
+    else board.clearHighlight();
   }
 
   // ---- tap-to-select movement (select pieces, then tap a highlighted destination) ----
@@ -1237,17 +1274,27 @@ window.UI = (function () {
     if (game.phase === "combatMove" && !toSpace.sea && rows.some(r => r.take > 0 && r.mode === "offload"))
       banner("Amphibious assault declared on " + toSpace.name);
     maybeBomberMission(to, moved);
+    refreshNoncombatAir();
   }
 
   function moveQuantityDialog(rows, to) {
     const body = div("");
     body.appendChild(div("modal-note", "How many units should move to " + MAP.spaces[to].name + "?"));
+    const nums = [];
+    const syncNums = () => nums.forEach(({ r, node }) => node.textContent = r.take);
+    // quick set-all: MIN (just 1 of each) or MAX (all), since max is only the default
+    const quick = div("select-all-row");
+    quick.innerHTML = `<button class="mini-btn" data-q="min">MIN · 1 EACH</button><button class="mini-btn" data-q="max">MAX · ALL</button>`;
+    quick.querySelector('[data-q="min"]').onclick = () => { for (const r of rows) r.take = Math.min(1, r.eligible.length); syncNums(); };
+    quick.querySelector('[data-q="max"]').onclick = () => { for (const r of rows) r.take = r.eligible.length; syncNums(); };
+    body.appendChild(quick);
     for (const r of rows) {
       const row = div("unit-row");
       const verb = r.mode === "load" ? " (load transports)" : r.mode === "offload" ? " (offload cargo)" : "";
-      row.innerHTML = `<div class="unit-label">${UNIT_NAME[r.type].toUpperCase()}${verb}</div>
+      row.innerHTML = `<div class="unit-label">${UNIT_NAME[r.type].toUpperCase()}${verb} <em class="avail">of ${r.eligible.length}</em></div>
         <div class="unit-stats"><span class="stepper"><button class="minus">−</button><b>${r.take}</b><button class="plus">+</button></span></div>`;
       const num = row.querySelector("b");
+      nums.push({ r, node: num });
       row.querySelector(".plus").onclick = () => { r.take = Math.min(r.eligible.length, r.take + 1); num.textContent = r.take; };
       row.querySelector(".minus").onclick = () => { r.take = Math.max(0, r.take - 1); num.textContent = r.take; };
       body.appendChild(row);
