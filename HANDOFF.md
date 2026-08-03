@@ -1,6 +1,26 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-02 (v1.9.7)_
+_Updated: 2026-08-03 (v1.10.0)_
+
+## v1.10.0 (2026-08-03) — USA Super Bomber (Admin experimental)
+Opt-in super unit, **off by default**, fully backward-compatible (all existing tests +
+smoke unchanged). Enable in **⚙ Admin → USA Super Bomber**, then tick the option at game
+setup (hotseat or online).
+- **Unit** (`engine.js`): `superbomber` — cost **15**, move **8**, atk 4 / def 1, air; carries
+  a man. Replaces the US bomber in the purchase list; existing US bombers upgrade for +3
+  (`upgradeBomber`). Option `superBomber` lives in `game.options` (serialized → syncs online).
+- **Combat** (`combat.js`): a `superStrike` step runs after AA (so AA/fighter-soak resolves
+  first). Each attacking super bomber rolls once — any die **≤4** annihilates every enemy unit
+  at the target **and** the industrial complex (land or sea); on land the carried man drops in
+  to **seize** the territory. A miss (>4) is clean — the bomber flies home. Undefended enemy
+  territory: `resolveUnopposed` drops the man to seize it. Super bombers never fire in normal
+  rounds and can still run strategic bombing.
+- **UI**: purchase panel swap + upgrade control; Admin toggle (`axis.admin.superBomber`);
+  new-game option row; names/glyph/icon (shares the bomber silhouette); SBR button accepts it.
+- **Tests:** `tests/superbomber.test.js` (10) — stats, upgrade, strike hit/miss, AA shoot-down,
+  fighter soak, sea, undefended seize. Browser-tested end-to-end (admin → setup → US purchase).
+
+## v1.9.7–1.9.8 (2026-08-02) — relay moved to a dedicated throwaway account (Raj78789494/axis)
 
 ## v1.9.7–1.9.8 (2026-08-02) — relay moved to a dedicated throwaway account
 - **`DEFAULT_REPO` → `Raj78789494/axis`** (`online.js`; the relay repo Joe created on that account). The online-play relay now

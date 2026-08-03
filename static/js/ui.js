@@ -81,6 +81,7 @@ window.UI = (function () {
     factory: "Builds new units each turn, up to the territory's income value.",
     fighter: "Versatile aircraft (def 4); escorts, intercepts, lands after combat.",
     bomber: "Long range, hits hard (atk 4), and can run strategic bombing raids.",
+    superbomber: "USA super weapon: flies 8, carries a man. One strike roll of 4 or less wipes out ALL enemy forces (and the complex) at the target — on land or sea — then the man seizes the territory.",
     submarine: "Surprise first strike; can submerge to slip away from battle.",
     transport: "Ferries land units across the sea; has no attack of its own.",
     destroyer: "Anti-submarine screen — cancels enemy sub surprise strikes.",
@@ -89,7 +90,7 @@ window.UI = (function () {
     battleship: "The heaviest warship: two hit points and shore bombardment.",
   };
   const UNIT_NAME = { infantry: "Infantry", artillery: "Artillery", tank: "Tank", aaa: "Antiaircraft Artillery",
-    factory: "Industrial Complex", fighter: "Fighter", bomber: "Bomber", submarine: "Submarine",
+    factory: "Industrial Complex", fighter: "Fighter", bomber: "Bomber", superbomber: "Super Bomber", submarine: "Submarine",
     transport: "Transport", destroyer: "Destroyer", cruiser: "Cruiser", carrier: "Aircraft Carrier",
     battleship: "Battleship" };
 
@@ -144,6 +145,9 @@ window.UI = (function () {
       });
     }
     $("#custom-territories").checked = false;
+    // USA Super Bomber option is visible only when enabled in Admin; pre-checked when so.
+    const sbRow = $("#setting-superbomber"), sbBox = $("#opt-superbomber");
+    if (sbRow && sbBox) { const on = adminSuperBomber(); sbRow.style.display = on ? "" : "none"; sbBox.checked = on; }
     $("#new-start").onclick = startNewGame;
   }
 
@@ -209,6 +213,7 @@ window.UI = (function () {
       straits: $("#opt-straits").checked,
       interceptors: $("#opt-interceptors").checked,
       totalVictory: $("#opt-total").checked,
+      superBomber: !!($("#opt-superbomber") && $("#opt-superbomber").checked),
     };
     const overrides = $("#custom-territories").checked ? territoryOverrides : {};
     game = new Game({ mapData: MAP, players, options, territoryOverrides: overrides });
@@ -684,9 +689,11 @@ window.UI = (function () {
 
   // ---- purchase panel ----
   function openPurchasePanel() {
+    // USA Super Bomber (Admin option) replaces the plain bomber in the US buy list.
+    const superOn = !!(game.options && game.options.superBomber) && game.current === "us";
     const TABS = { LAND: ["infantry", "artillery", "tank", "aaa"],
       SEA: ["submarine", "transport", "destroyer", "cruiser", "carrier", "battleship"],
-      AIR: ["fighter", "bomber"], INDUSTRY: ["factory"] };
+      AIR: superOn ? ["fighter", "superbomber"] : ["fighter", "bomber"], INDUSTRY: ["factory"] };
     let tab = "LAND";
     const d = div("panel purchase");
     const render = () => {
@@ -733,6 +740,24 @@ window.UI = (function () {
           banner(`<b>${UNIT_NAME[ut]}</b> — ${UNIT_DESC[ut] || ""}`);
         };
         d.appendChild(row);
+      }
+      // upgrade existing US bombers to super bombers (Admin option)
+      if (superOn) {
+        const bombers = game.units.filter(u => !u.dead && u.power === "us" && u.type === "bomber");
+        if (bombers.length) {
+          d.appendChild(div("panel-sub", "UPGRADE BOMBERS → SUPER BOMBERS (+3 IPC each)"));
+          for (const b of bombers) {
+            const where = (MAP.spaces[b.space] && MAP.spaces[b.space].name) || b.space;
+            const row = div("unit-row");
+            row.innerHTML = `<div class="unit-label">Bomber — ${where}</div>
+              <div class="unit-stats"><button class="mini-btn">⬆ UPGRADE (3)</button></div>`;
+            row.querySelector("button").onclick = () => {
+              try { game.upgradeBomber(b.id); render(); topBar(); board.setGame(game); }
+              catch (e) { banner(e.message); }
+            };
+            d.appendChild(row);
+          }
+        }
       }
       // repairs
       const damaged = Object.entries(game.icDamage).filter(([id, n]) => n > 0 && game.owner[id] === game.current);
@@ -866,7 +891,7 @@ window.UI = (function () {
       buttons.unshift({ label: "➤ MOVE UNITS", cls: "primary", value: "movePick" });
     // special orders in combat move
     if (game.phase === "combatMove" && game.players[game.current].type === "human") {
-      const myBombers = game.unitsAt(id, u => u.power === game.current && u.type === "bomber" && !u.sbr);
+      const myBombers = game.unitsAt(id, u => u.power === game.current && (u.type === "bomber" || u.type === "superbomber") && !u.sbr);
       const enemyIC = !s.sea && game.isHostileSpace(game.current, id) && game.unitsAt(id, u => u.type === "factory").length;
       if (myBombers.length && enemyIC)
         buttons.unshift({ label: "🛩 DECLARE BOMBING RAID", cls: "primary", value: "sbr" });
@@ -876,7 +901,7 @@ window.UI = (function () {
     }
     openModal(s.name.toUpperCase(), body, buttons).then((v) => {
       if (v === "sbr") {
-        const b = game.unitsAt(id, u => u.power === game.current && u.type === "bomber" && !u.sbr)[0];
+        const b = game.unitsAt(id, u => u.power === game.current && (u.type === "bomber" || u.type === "superbomber") && !u.sbr)[0];
         if (b) { try { game.setSBR(b.id); banner("Strategic bombing raid declared on " + s.name); } catch (e) { banner(e.message); } }
       }
       if (v === "seaAtk") { game.toggleSeaAttack(id); banner(game.declaredSeaAttacks.has(id) ? "Attack declared" : "Attack cancelled"); }
@@ -1306,7 +1331,7 @@ window.UI = (function () {
   function aiFeedClear() { const f = $("#ai-feed"); if (f) f.innerHTML = ""; }
 
   const NAMES_SHORT = { infantry: "Inf", artillery: "Art", tank: "Tank", aaa: "AA", factory: "IC",
-    fighter: "Ftr", bomber: "Bmr", submarine: "Sub", transport: "Trn", destroyer: "Dst",
+    fighter: "Ftr", bomber: "Bmr", superbomber: "SBmr", submarine: "Sub", transport: "Trn", destroyer: "Dst",
     cruiser: "Cru", carrier: "Car", battleship: "BB" };
   const lossList = (units) => {
     const m = {};
@@ -1786,6 +1811,8 @@ window.UI = (function () {
   // toggles like the USA Super Bomber once its rules are defined.
   const TOKEN_PAGE_URL = "https://github.com/settings/personal-access-tokens/new";
   const TOKEN_EXPIRES = "August 2, 2027"; // the axis_multiplayer fine-grained token
+  const ADMIN_SB_KEY = "axis.admin.superBomber";
+  const adminSuperBomber = () => { try { return localStorage.getItem(ADMIN_SB_KEY) === "1"; } catch (e) { return false; } };
   function openAdminPanel() {
     const body = div("");
     body.innerHTML = `
@@ -1813,12 +1840,18 @@ window.UI = (function () {
       </div>
       <div class="admin-sec">
         <h3 class="admin-h">🧪 Experimental features</h3>
-        <div class="modal-note" style="text-align:left">
-          <b>🛩 USA Super Bomber</b> — <i>coming soon (rules being defined).</i> Once added,
-          it toggles here and, when on, becomes available to the <b>USA</b> during game setup
-          for both hotseat and online games.
-        </div>
+        <label class="setting" style="text-align:left">
+          <input type="checkbox" id="admin-superbomber"> <b>🛩 USA Super Bomber</b> — when ON, the
+          <b>USA Super Bomber</b> option appears in game setup (hotseat &amp; online). Flies 8, carries a
+          man; one strike roll of <b>4 or less</b> wipes out every enemy piece (and the complex) at the
+          target — land or sea — then the man seizes the territory. Replaces the US bomber (cost 15);
+          existing US bombers upgrade for +3.
+        </label>
       </div>`;
+    const cb = body.querySelector("#admin-superbomber");
+    cb.checked = adminSuperBomber();
+    cb.onchange = () => { try { localStorage.setItem(ADMIN_SB_KEY, cb.checked ? "1" : "0"); } catch (e) {}
+      banner(cb.checked ? "USA Super Bomber enabled — turn it on in game setup." : "USA Super Bomber disabled."); };
     return openModal("⚙ ADMIN", body, [
       { label: "OPEN ONLINE SETUP", value: "setup" },
       { label: "CLOSE", cls: "primary", value: "close" },

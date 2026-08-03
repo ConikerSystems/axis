@@ -23,6 +23,9 @@
     factory: { cost: 15, move: 0, attack: 0, defense: 0, facility: true },
     fighter: { cost: 10, move: 4, attack: 3, defense: 4, air: true },
     bomber: { cost: 12, move: 6, attack: 4, defense: 1, air: true },
+    // USA-only Super Bomber (Admin option). Carries a man (the +3 over a bomber),
+    // flies 8, and on attack makes one super-strike roll (see combat.js).
+    superbomber: { cost: 15, move: 8, attack: 4, defense: 1, air: true, superBomber: true },
     submarine: { cost: 6, move: 2, attack: 2, defense: 1, sea: true, sub: true },
     transport: { cost: 7, move: 2, attack: 0, defense: 0, sea: true, transport: true, capacity: true },
     destroyer: { cost: 8, move: 2, attack: 2, defense: 2, sea: true, surface: true, antiSub: true },
@@ -47,7 +50,7 @@
     //           territoryOverrides: {spaceId: power} }
     constructor(config) {
       this.map = config.mapData;
-      this.options = Object.assign({ straits: false, interceptors: false, totalVictory: false }, config.options);
+      this.options = Object.assign({ straits: false, interceptors: false, totalVictory: false, superBomber: false }, config.options);
       this.players = config.players;
       this.seed = config.seed == null ? Math.floor(Math.random() * 2 ** 31) : config.seed;
       this._rngCalls = 0;
@@ -373,6 +376,21 @@
       if (ex) ex.qty += qty; else this.purchases.push({ unit: unitType, qty });
       if ((ex ? ex.qty : qty) < 0) throw new Error("negative");
     }
+    // USA-only (Admin option): upgrade an existing bomber to a Super Bomber for the
+    // +3 IPC difference. Deducts immediately so purchase accounting/undo stay simple.
+    upgradeBomber(unitId) {
+      if (this.phase !== "purchase") throw new Error("wrong phase");
+      if (!this.options.superBomber) throw new Error("super bomber not enabled");
+      if (this.current !== "us") throw new Error("US only");
+      const u = this.unit(unitId);
+      if (!u || u.dead || u.power !== "us" || u.type !== "bomber") throw new Error("not a US bomber");
+      const cost = UNITS.superbomber.cost - UNITS.bomber.cost; // 3
+      if (this.purchaseSpent() + cost > this.ipc.us) throw new Error("not enough IPCs");
+      this.ipc.us -= cost;
+      u.type = "superbomber";
+      this._log("Upgraded a bomber to a Super Bomber (−" + cost + " IPC)");
+      return u;
+    }
     repairIC(spaceId, points) {
       if (this.phase !== "purchase") throw new Error("wrong phase");
       const dmg = this.icDamage[spaceId] || 0;
@@ -395,7 +413,7 @@
     // declare a strategic bombing raid for a bomber sitting over an enemy IC territory
     setSBR(unitId) {
       const u = this.unit(unitId);
-      if (!u || u.type !== "bomber") throw new Error("not a bomber");
+      if (!u || (u.type !== "bomber" && u.type !== "superbomber")) throw new Error("not a bomber");
       const s = this.space(u.space);
       if (s.sea || !this.isHostileSpace(u.power, u.space) ||
         !this.unitsAt(u.space, x => x.type === "factory").length) throw new Error("no enemy IC here");

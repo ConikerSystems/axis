@@ -88,3 +88,5 @@ window.UNIT_ICONS = (function () {
       '<path d="M5 -1 L9 -1 9 1.2 5 1.2 Z"/><rect x="7" y="-2.6" width="3" height="1.7" rx="0.5" transform="rotate(16 8.5 -2)"/>',                    // aft turret+guns
   };
 })();
+// Super Bomber shares the bomber silhouette (a gold ring in board.js marks it).
+window.UNIT_ICONS.superbomber = window.UNIT_ICONS.bomber;
