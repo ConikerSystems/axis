@@ -836,8 +836,15 @@ window.UI = (function () {
     } else {
       for (const ic of game.eligibleICs(game.current)) {
         if (game._placedCount(ic) >= game.mobilizeCapacity(ic)) continue;
-        if (info.sea || ut === "fighter") for (const nb of MAP.spaces[ic].conn) if (MAP.spaces[nb].sea) ids.push(nb);
-        if (!info.sea) ids.push(ic);
+        for (const nb of MAP.spaces[ic].conn) {
+          if (!MAP.spaces[nb].sea) continue;
+          if (info.sea) ids.push(nb);                 // sea units: any adjacent sea zone
+          // a fighter may only be placed at sea onto a friendly carrier that has room
+          // (per the rules — place a purchased carrier in the zone first, then the fighter)
+          else if (ut === "fighter" && game.unitsAt(nb, x => x.type === "carrier" &&
+            x.power === game.current && game.carrierFighters(x).length < 2).length) ids.push(nb);
+        }
+        if (!info.sea) ids.push(ic); // fighters & bombers can also go on the IC's land
       }
     }
     board.highlight(ids, "place");

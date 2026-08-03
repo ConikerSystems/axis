@@ -622,5 +622,20 @@ t("a protecting enemy sub still requires an explicit declaration", () => {
   ok(!g.battles.some(b => b.space === "sz62"), "no auto battle when a sub is present (may bypass)");
 });
 
+t("mobilize: fighter needs a carrier at sea; bomber can't go to sea", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "purchase"; // US
+  g.buy("fighter", 1); g.buy("bomber", 1); g.buy("carrier", 1); g.endPurchase();
+  g.phase = "mobilize";
+  const ic = "eastern_united_states";
+  const sz = MAP.spaces[ic].conn.find(n => MAP.spaces[n].sea);
+  let fNoCarrier = false; try { g.place("fighter", sz); } catch (e) { fNoCarrier = true; }
+  ok(fNoCarrier, "fighter blocked at sea with no carrier");
+  let bomberSea = false; try { g.place("bomber", sz); } catch (e) { bomberSea = true; }
+  ok(bomberSea, "bomber cannot be placed at sea");
+  g.place("carrier", sz);   // put the purchased carrier in the zone
+  g.place("fighter", sz);   // now the fighter is allowed, onto that carrier
+  eq(g.unitsAt(sz, u => u.type === "fighter" && u.onCarrier).length, 1, "fighter placed on the carrier");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
