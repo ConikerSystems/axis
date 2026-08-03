@@ -30,6 +30,15 @@ window.Board = (function () {
     return e;
   };
 
+  // Touch devices (iPad/phone) run on mobile GPUs that re-rasterize full-viewport
+  // SVG filters on every pinch/pan frame — the biggest cause of laggy zoom. On a
+  // coarse pointer we drop the decorative torn/turbulence/drop-shadow filters and
+  // keep flat parchment fills, which pan and pinch smoothly.
+  const LOW_GFX = (() => {
+    try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); }
+    catch (e) { return false; }
+  })();
+
   function create(svg, MAP, callbacks) {
     const cb = callbacks || {};
     const W = MAP.width, H = MAP.height;
@@ -76,10 +85,11 @@ window.Board = (function () {
     const vp = el("g", { id: "viewport" }, svg);
     // torn ocean sheet: a full-bleed base so the whole map reads as one aged chart
     // torn from a larger sheet, with a soft drop shadow onto the table beneath.
-    const gSheet = el("g", { filter: "url(#sheetShadow)" }, vp);
-    el("rect", { x: 0, y: 0, width: W, height: H, fill: SEA_FILL, filter: "url(#torn)" }, gSheet);
-    el("rect", { x: 40, y: 40, width: W - 80, height: H - 80, fill: SEA_FILL, filter: "url(#seaTexture)",
-      "pointer-events": "none" }, vp);
+    const gSheet = el("g", LOW_GFX ? {} : { filter: "url(#sheetShadow)" }, vp);
+    el("rect", Object.assign({ x: 0, y: 0, width: W, height: H, fill: SEA_FILL },
+      LOW_GFX ? {} : { filter: "url(#torn)" }), gSheet);
+    el("rect", Object.assign({ x: 40, y: 40, width: W - 80, height: H - 80, fill: SEA_FILL,
+      "pointer-events": "none" }, LOW_GFX ? {} : { filter: "url(#seaTexture)" }), vp);
     el("rect", { x: 40, y: 40, width: W - 80, height: H - 80, fill: "url(#grat)", "pointer-events": "none" }, vp);
     const gSpaces = el("g", { id: "spaces" }, vp);
     const gBorders = el("g", { id: "borders" }, vp);
@@ -239,8 +249,7 @@ window.Board = (function () {
       if (drag) {
         const p = svgPoint(e.clientX, e.clientY);
         gDrag.setAttribute("transform", `translate(${p.x},${p.y})`);
-        const t = spaceAt(e);
-        hoverTarget(t && drag.targets.has(t) ? t : null);
+        scheduleHover(e.clientX, e.clientY); // hit-test coalesced to one rAF/frame
         return;
       }
       if (panning) {
@@ -353,13 +362,29 @@ window.Board = (function () {
         '</div>', "axis.ctrls.pan");
     }
 
-    function spaceAt(e) {
+    function spaceAtXY(cx, cy) {
       // hit-test under pointer, ignoring unit/drag layers
       gUnits.style.pointerEvents = "none"; gDrag.style.display = "none";
-      const n = document.elementFromPoint(e.clientX, e.clientY);
+      const n = document.elementFromPoint(cx, cy);
       gUnits.style.pointerEvents = ""; gDrag.style.display = "";
       const sp = n && n.closest && n.closest(".space");
       return sp ? sp.dataset.id : null;
+    }
+    function spaceAt(e) { return spaceAtXY(e.clientX, e.clientY); }
+    // Drag hover hit-testing toggles pointer-events + calls elementFromPoint, which
+    // forces a style/layout flush. iOS can fire several pointermove events per frame,
+    // so we coalesce the hit-test into one rAF per frame (the ghost still follows the
+    // finger every event). This keeps finger-drag smooth on iPad.
+    let hoverRAF = 0, hoverPt = null;
+    function scheduleHover(cx, cy) {
+      hoverPt = { cx, cy };
+      if (hoverRAF) return;
+      hoverRAF = requestAnimationFrame(() => {
+        hoverRAF = 0;
+        if (!drag || !hoverPt) return;
+        const t = spaceAtXY(hoverPt.cx, hoverPt.cy);
+        hoverTarget(t && drag.targets.has(t) ? t : null);
+      });
     }
     function drawGhost(p, count, power) {
       gDrag.innerHTML = "";

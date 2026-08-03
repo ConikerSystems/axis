@@ -73,8 +73,10 @@ t("strike ALWAYS annihilates all defenders + the complex; man seizes the territo
   const sb = g._spawn("superbomber", "us", "germany");
   force(g, 6); // even the worst roll — the strike is guaranteed
   autoBattle(g, "germany");
-  eq(g.unitsAt("germany", u => u.power === "germany").length, 0, "all German units + complex destroyed");
-  eq(g.unitsAt("germany", u => u.type === "factory").length, 0, "industrial complex destroyed");
+  eq(g.unitsAt("germany", u => u.power === "germany").length, 0, "all German combat units destroyed");
+  const fac = g.unitsAt("germany", u => u.type === "factory");
+  eq(fac.length, 1, "industrial complex is PRESERVED");
+  eq(fac[0].power, "us", "complex captured by the US, not destroyed");
   eq(g.owner["germany"], "us", "territory captured by the US");
   eq(g.unitsAt("germany", u => u.type === "infantry" && u.power === "us").length, 1, "carried man on the ground");
   ok(!sb.dead, "super bomber survives to fly home");
