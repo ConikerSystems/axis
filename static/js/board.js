@@ -5,10 +5,10 @@ window.Board = (function () {
   "use strict";
 
   const POWER_COLOR = { // chip tints matched to the reference app
-    soviet: "#8a2b2b", germany: "#26292e", uk: "#c2a469", japan: "#d5852f", us: "#6d8a48",
+    soviet: "#8a2b2b", germany: "#26292e", uk: "#c2a469", japan: "#d5852f", us: "#3f7d34",
   };
   const POWER_FILL = { // muted historical map fills, aged-chart style
-    soviet: "#c8917a", germany: "#95a7ad", uk: "#d8c191", japan: "#df9a4e", us: "#9fb079",
+    soviet: "#c8917a", germany: "#95a7ad", uk: "#d8c191", japan: "#df9a4e", us: "#8fbf6b",
   };
   const NEUTRAL_FILL = "#d8cfba";
   const SEA_FILL = "#8f9d97"; // aged sea-chart grey-teal
