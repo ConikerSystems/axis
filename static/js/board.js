@@ -301,52 +301,55 @@ window.Board = (function () {
     }
     const host = svg.parentNode;
     if (host && !host.querySelector(".board-ctrls")) {
-      const ctr = document.createElement("div");
-      ctr.className = "board-ctrls";
-      ctr.innerHTML =
-        '<div class="bc-grip" title="Drag to move these controls">⠿</div>' +
+      const acts = { zin: () => zoomCenter(1.5), zout: () => zoomCenter(1 / 1.5),
+        up: () => panStep(0, -1), down: () => panStep(0, 1), left: () => panStep(-1, 0), right: () => panStep(1, 0) };
+      // Zoom (bottom-left) and pan (bottom-right) are separate draggable clusters.
+      const makeCluster = (cls, inner, key) => {
+        const ctr = document.createElement("div");
+        ctr.className = "board-ctrls " + cls;
+        ctr.innerHTML = '<div class="bc-grip" title="Drag to move">⠿</div>' + inner;
+        host.appendChild(ctr);
+        // restore a parked position, if any (overrides the CSS default corner)
+        try { const pos = JSON.parse(localStorage.getItem(key) || "null");
+          if (pos && pos.left != null) { ctr.style.left = pos.left; ctr.style.top = pos.top;
+            ctr.style.right = "auto"; ctr.style.bottom = "auto"; ctr.style.transform = "none"; } } catch (e) {}
+        ctr.addEventListener("click", (e) => {
+          const b = e.target.closest("[data-act]"); if (!b) return;
+          e.preventDefault(); e.stopPropagation();
+          const fn = acts[b.dataset.act]; if (fn) fn();
+        });
+        const grip = ctr.querySelector(".bc-grip");
+        let cdrag = null;
+        grip.addEventListener("pointerdown", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          grip.setPointerCapture(e.pointerId);
+          const hr = host.getBoundingClientRect(), cr = ctr.getBoundingClientRect();
+          cdrag = { hr, dx: e.clientX - cr.left, dy: e.clientY - cr.top, cw: cr.width, ch: cr.height };
+        });
+        grip.addEventListener("pointermove", (e) => {
+          if (!cdrag) return; e.preventDefault();
+          let x = e.clientX - cdrag.hr.left - cdrag.dx, y = e.clientY - cdrag.hr.top - cdrag.dy;
+          x = Math.max(4, Math.min(cdrag.hr.width - cdrag.cw - 4, x));
+          y = Math.max(4, Math.min(cdrag.hr.height - cdrag.ch - 4, y));
+          ctr.style.left = x + "px"; ctr.style.top = y + "px"; ctr.style.right = "auto"; ctr.style.bottom = "auto"; ctr.style.transform = "none";
+        });
+        const endGrip = () => { if (!cdrag) return; cdrag = null;
+          try { localStorage.setItem(key, JSON.stringify({ left: ctr.style.left, top: ctr.style.top })); } catch (e) {} };
+        grip.addEventListener("pointerup", endGrip);
+        grip.addEventListener("pointercancel", endGrip);
+      };
+      makeCluster("zoom-ctrls",
         '<div class="bc-zoom">' +
           '<button class="bc-btn zoom" data-act="zin" aria-label="Zoom in">🔍<span>+</span></button>' +
           '<button class="bc-btn zoom" data-act="zout" aria-label="Zoom out">🔍<span>−</span></button>' +
-        '</div>' +
+        '</div>', "axis.ctrls.zoom");
+      makeCluster("pan-ctrls",
         '<div class="bc-pad">' +
           '<button class="bc-btn up" data-act="up" aria-label="Pan up">▲</button>' +
           '<button class="bc-btn left" data-act="left" aria-label="Pan left">◀</button>' +
           '<button class="bc-btn right" data-act="right" aria-label="Pan right">▶</button>' +
           '<button class="bc-btn down" data-act="down" aria-label="Pan down">▼</button>' +
-        '</div>';
-      host.appendChild(ctr);
-      // restore a saved position (so it stays where the player parked it)
-      try { const pos = JSON.parse(localStorage.getItem("axis.ctrls.pos") || "null");
-        if (pos && pos.left != null) { ctr.style.left = pos.left; ctr.style.top = pos.top;
-          ctr.style.transform = "none"; ctr.style.right = "auto"; } } catch (e) {}
-      const acts = { zin: () => zoomCenter(1.5), zout: () => zoomCenter(1 / 1.5),
-        up: () => panStep(0, -1), down: () => panStep(0, 1), left: () => panStep(-1, 0), right: () => panStep(1, 0) };
-      ctr.addEventListener("click", (e) => {
-        const b = e.target.closest("[data-act]"); if (!b) return;
-        e.preventDefault(); e.stopPropagation();
-        const fn = acts[b.dataset.act]; if (fn) fn();
-      });
-      // --- drag the whole cluster by its grip, so it never blocks a territory ---
-      const grip = ctr.querySelector(".bc-grip");
-      let cdrag = null;
-      grip.addEventListener("pointerdown", (e) => {
-        e.preventDefault(); e.stopPropagation();
-        grip.setPointerCapture(e.pointerId);
-        const hr = host.getBoundingClientRect(), cr = ctr.getBoundingClientRect();
-        cdrag = { hr, dx: e.clientX - cr.left, dy: e.clientY - cr.top, cw: cr.width, ch: cr.height };
-      });
-      grip.addEventListener("pointermove", (e) => {
-        if (!cdrag) return; e.preventDefault();
-        let x = e.clientX - cdrag.hr.left - cdrag.dx, y = e.clientY - cdrag.hr.top - cdrag.dy;
-        x = Math.max(4, Math.min(cdrag.hr.width - cdrag.cw - 4, x));
-        y = Math.max(4, Math.min(cdrag.hr.height - cdrag.ch - 4, y));
-        ctr.style.left = x + "px"; ctr.style.top = y + "px"; ctr.style.right = "auto"; ctr.style.transform = "none";
-      });
-      const endGrip = () => { if (!cdrag) return; cdrag = null;
-        try { localStorage.setItem("axis.ctrls.pos", JSON.stringify({ left: ctr.style.left, top: ctr.style.top })); } catch (e) {} };
-      grip.addEventListener("pointerup", endGrip);
-      grip.addEventListener("pointercancel", endGrip);
+        '</div>', "axis.ctrls.pan");
     }
 
     function spaceAt(e) {
