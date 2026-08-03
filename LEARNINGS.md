@@ -45,6 +45,24 @@ radius.
 - Never log or echo secrets. Assume anything sent to an external service is retained even if
   later deleted.
 
+**Client-only apps: any data that syncs between users is untrusted input — escape it, and add a
+CSP.** With no server to validate, the *other user's* data (names, titles, chat/log strings coming
+back through a shared store) is attacker-controlled. If it reaches `innerHTML`, it's stored XSS —
+and in a keyless app that means the injected script can read the token out of `localStorage` and
+exfiltrate it. Defenses, layered:
+- **Escape every synced/opponent string on render** (`&<>"'` → entities) — or use `textContent`.
+  Developer-constant strings (labels, enum names) don't need it; anything a user typed does.
+- **Add a Content-Security-Policy** (`script-src 'self'`, no `unsafe-inline`; `connect-src` limited
+  to your own origin + the exact API you call). This is the safety net that neutralizes the
+  *execution* and *exfiltration* even if you miss an escaping site — inline `onerror=`/`<script>`
+  won't run, and a stolen token can't be POSTed to an attacker host.
+- **Validate untrusted link/URL parameters at the entry point** (game id, repo, token from an
+  invite link): allow only the expected charset/shape, and re-apply the credential-type hard-lock —
+  don't trust a hand-crafted link to carry a safe value.
+- **Gate the risky mode behind an explicit, informed opt-in.** If most users only need the local
+  path (here: hotseat), keep the credential-bearing online mode **off by default**, grayed out, with
+  a plain-language note of what it needs and the risk — so nobody wanders into the token flow.
+
 **Reusable checklist for the next app:**
 - [ ] Does this integration get its **own** identity with nothing else attached?
 - [ ] Is the credential **scoped to one resource**, **least-privilege**, and **expiring**?

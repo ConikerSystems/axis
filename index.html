@@ -2,6 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <!-- Content Security Policy: defense-in-depth against XSS. Scripts may load only from our
+       own origin (no inline/injected script execution — blocks `<img onerror=…>` style
+       payloads); network calls are limited to same-origin + the GitHub API used by the
+       optional online relay. Inline styles are allowed (the UI uses them heavily; CSS can't
+       execute code). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.github.com; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Axis 1942 — Strategy Board Game</title>
   <meta name="description" content="Play the classic 1942 world-war strategy board game on your iPad — hotseat or vs the computer.">

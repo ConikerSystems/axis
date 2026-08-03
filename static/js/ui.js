@@ -6,6 +6,11 @@ window.UI = (function () {
   const MAP = window.MAP_DATA;
   const $ = (sel) => document.querySelector(sel);
   const div = (cls, html) => { const d = document.createElement("div"); if (cls) d.className = cls; if (html != null) d.innerHTML = html; return d; };
+  // HTML-escape any user- or opponent-controlled string before it goes into innerHTML.
+  // (Player names and game titles can come from the other player in an online game, so they
+  // are untrusted; developer constants like territory/power/unit names do not need this.)
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   // a small unit chip (silhouette icon on a nation-colored disc) for battle UI
   const chipHtml = (type, power) => {
     const icon = (window.UNIT_ICONS && UNIT_ICONS[type]) || "";
@@ -135,7 +140,7 @@ window.UI = (function () {
     if (onlineCreateMode) {
       const extra = div("settings");
       extra.id = "online-extra";
-      extra.innerHTML = `<label class="setting"><b>PLAYER 1 (YOU):</b> ${cfg.name || "?"}
+      extra.innerHTML = `<label class="setting"><b>PLAYER 1 (YOU):</b> ${esc(cfg.name || "?")}
         &nbsp;&nbsp;<b>PLAYER 2:</b> <input id="p2-name" type="text" maxlength="14" placeholder="THEIR NAME"
         style="background:#101215;border:1px solid var(--gold-dim);color:var(--gold);font:inherit;font-weight:700;padding:6px 10px;border-radius:4px;">
         <span style="color:var(--dim)"> — assign each power below, then share the Game ID.</span></label>`;
@@ -248,9 +253,9 @@ window.UI = (function () {
       banner(null);
       const choice = await openModal("GAME CREATED — " + id, div("modal-note",
         `Your Game ID is <b style="font-size:1.6rem;color:var(--gold)">${id}</b><br><br>
-         Tap <b>📲 INVITE ${p2name.toUpperCase()}</b> to text them a link — one tap on it and
+         Tap <b>📲 INVITE ${esc(p2name.toUpperCase())}</b> to text them a link — one tap on it and
          they're in the game (no setup, no token, no typing except their name).`),
-        [{ label: "📲 INVITE " + p2name.toUpperCase(), cls: "primary", value: "invite" },
+        [{ label: "📲 INVITE " + esc(p2name.toUpperCase()), cls: "primary", value: "invite" },
          { label: "START PLAYING", cls: "" }]);
       if (choice === "invite") await shareInvite();
       enterGame();
@@ -466,7 +471,7 @@ window.UI = (function () {
     const b = div("", `<div class="handoff">
       <div class="handoff-emblem ${SIDES[game.current]}">${EMBLEM[game.current]}</div>
       <h2>${POWER_NAMES[game.current].toUpperCase()}</h2>
-      <p>Round ${game.round} — pass the device to <b>${pl.name}</b></p></div>`);
+      <p>Round ${game.round} — pass the device to <b>${esc(pl.name)}</b></p></div>`);
     openModal("NEXT PLAYER", b, [{ label: "BEGIN TURN", cls: "primary" }]).then(() => startPhase());
   }
 
@@ -626,7 +631,7 @@ window.UI = (function () {
     ];
     if (online) menuBtns.push({ label: "🗑 CANCEL GAME (DELETE FOR BOTH)", cls: "", value: "cancelGame" });
     else menuBtns.push({ label: "🗑 DELETE GAME", cls: "", value: "deleteLocal" });
-    const choice = await openModal("MENU", div("", `<p class="modal-note">${game ? game.title : ""}${online ? " · 🌐 " + online.id : ""}</p>`), menuBtns);
+    const choice = await openModal("MENU", div("", `<p class="modal-note">${game ? esc(game.title) : ""}${online ? " · 🌐 " + esc(online.id) : ""}</p>`), menuBtns);
     if (choice === "exit") {
       autosave();
       if (window.Online) { Online.stopPolling(); Online.stopSpectating(); }
@@ -635,12 +640,12 @@ window.UI = (function () {
     }
     if (choice === "log") {
       const body = div("log-view", game.log.slice(-120).map(l =>
-        `<div><b>R${l.round}</b> ${POWER_NAMES[l.power] || ""} <i>${PHASE_LABEL[l.phase] || ""}</i> — ${l.msg}</div>`).join(""));
+        `<div><b>R${+l.round || 0}</b> ${POWER_NAMES[l.power] || ""} <i>${PHASE_LABEL[l.phase] || ""}</i> — ${esc(l.msg)}</div>`).join(""));
       openModal("GAME LOG", body, [{ label: "CLOSE", cls: "primary" }]);
     }
     if (choice === "deleteLocal") {
       const sure = await confirmModal("DELETE GAME?",
-        `Permanently delete "<b>${game.title}</b>"? This cannot be undone.`);
+        `Permanently delete "<b>${esc(game.title)}</b>"? This cannot be undone.`);
       if (!sure) return;
       localStorage.removeItem(saveKey);
       game = null; online = null;
@@ -649,7 +654,7 @@ window.UI = (function () {
     }
     if (choice === "cancelGame") {
       const sure = await confirmModal("CANCEL " + online.id + "?",
-        `This permanently deletes "${game.title}" from GitHub for BOTH players. There is no undo.`);
+        `This permanently deletes "${esc(game.title)}" from GitHub for BOTH players. There is no undo.`);
       if (!sure) return;
       try {
         Online.stopPolling(); Online.stopSpectating();
@@ -1404,7 +1409,7 @@ window.UI = (function () {
     bRec.resolved = true;
     if (online) {
       const s = MAP.spaces[bRec.space], r = battle.result || {};
-      onlineOutbox.push(`⚔ <b>${s.name}</b>: ${r.type === "retreat" ? "attacker retreated" :
+      onlineOutbox.push(`⚔ ${s.name}: ${r.type === "retreat" ? "attacker retreated" :
         r.captured ? "captured by " + POWER_NAMES[battle.attacker] :
         r.attackerWon ? "attacker won" : "defenders held"} · atk lost ${lossList(att0)} · def lost ${lossList(def0)}`);
     }
@@ -1550,7 +1555,7 @@ window.UI = (function () {
   const AI_PACE = 340;
 
   function aiFeed(html) {
-    if (online) onlineOutbox.push(html); // collected into the "while you were away" report
+    if (online) onlineOutbox.push(String(html).replace(/<[^>]*>/g, "")); // plain text — escaped on the other side
     const feed = $("#ai-feed");
     if (!feed) return;
     const e = div("ai-ev", html);
@@ -1814,12 +1819,12 @@ window.UI = (function () {
         const d = g.data;
         const mySeat = Online.seat(id);
         const turnName = d.winner ? (d.winner === "axis" ? "AXIS WON" : "ALLIES WON")
-          : `${(d.seatNames || {})[d.turnSeat] || d.turnSeat}'s turn` +
+          : `${esc((d.seatNames || {})[d.turnSeat] || d.turnSeat)}'s turn` +
             (mySeat && d.turnSeat === mySeat ? " — YOU!" : "");
         const when = d.updated ? new Date(d.updated).toLocaleDateString() : "";
-        row.innerHTML = `<div class="unit-label">${d.title || id} <em style="color:var(--dim);font-style:normal">· ${id}</em></div>
+        row.innerHTML = `<div class="unit-label">${esc(d.title || id)} <em style="color:var(--dim);font-style:normal">· ${esc(id)}</em></div>
           <div class="panel-sub" style="text-align:left;margin:2px 0 8px">${turnName}${when ? " · " + when : ""}
-            · ${(d.seatNames || {}).p1 || "P1"} vs ${(d.seatNames || {}).p2 || "P2"}</div>
+            · ${esc((d.seatNames || {}).p1 || "P1")} vs ${esc((d.seatNames || {}).p2 || "P2")}</div>
           <div class="unit-stats" style="justify-content:flex-start;gap:10px">
             <span class="mini-btn ol-open">▶ OPEN</span>
             <span class="mini-btn ol-del" style="border-color:var(--red);color:#ff8a75">🗑 DELETE</span>
@@ -1829,8 +1834,8 @@ window.UI = (function () {
           joinOnlineGame(id, (t) => banner(t)).catch(e => banner("✗ " + e.message));
         };
         row.querySelector(".ol-del").onclick = async () => {
-          const sure = await confirmModal("DELETE " + id + "?",
-            `This permanently deletes "${d.title || id}" for BOTH players. There is no undo.`);
+          const sure = await confirmModal("DELETE " + esc(id) + "?",
+            `This permanently deletes "${esc(d.title || id)}" for BOTH players. There is no undo.`);
           if (!sure) return;
           try {
             await Online.deleteGame(id);
@@ -1865,14 +1870,23 @@ window.UI = (function () {
     try {
       if (navigator.share) { await navigator.share({ title: "Axis 1942 — " + online.id, text, url: link }); return; }
     } catch (e) { if (e && e.name === "AbortError") return; }
-    try { await navigator.clipboard.writeText(text + "\n" + link); banner("Invite link copied — paste it into a text to " + who + "."); }
+    try { await navigator.clipboard.writeText(text + "\n" + link); banner("Invite link copied — paste it into a text to " + esc(who) + "."); }
     catch (e) { prompt("Copy this invite link:", link); }
   }
   // arriving via an invite link: save the key, ask only for a name, jump into the game
   async function handleInvite(id, key, repoOverride) {
     const cfg = Online.config() || {};
+    // Validate anything carried by the (untrusted) invite link before storing it: accept only
+    // a fine-grained token (github_pat_…) — same hard-lock as manual setup — and an "owner/repo"
+    // shaped override, so a crafted link can't plant a broad token or inject into API paths.
+    const repoOk = repoOverride && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repoOverride);
+    if (key && !/^github_pat_/.test(key)) {
+      banner("That invite carries a non fine-grained token — ignored for safety. Set up Online play manually.");
+      key = null;
+    }
     if (key) Online.saveConfig({ name: cfg.name || "", token: key,
-      repo: repoOverride || cfg.repo || Online.repo() });
+      repo: (repoOk ? repoOverride : null) || cfg.repo || Online.repo() });
+    setOnlineEnabled(true); // accepting an invite is an explicit opt-in to online play
     if (!(Online.config() || {}).name) {
       await new Promise((resolve) => {
         const wrap = div("modal");
@@ -1926,14 +1940,14 @@ window.UI = (function () {
   function enterWaiting() {
     const who = (online.seatNames && online.seatNames[otherSeat()]) || "opponent";
     const d = div("panel");
-    d.appendChild(div("panel-title", "WATCHING " + who.toUpperCase()));
-    d.appendChild(div("panel-sub", "Game " + online.id + " — the board follows " + who + "'s moves live. Your turn unlocks automatically."));
+    d.appendChild(div("panel-title", "WATCHING " + esc(who.toUpperCase())));
+    d.appendChild(div("panel-sub", "Game " + esc(online.id) + " — the board follows " + esc(who) + "'s moves live. Your turn unlocks automatically."));
     const btn = div("btn primary", "CHECK NOW");
     btn.style.cssText = "display:block;margin:12px auto;max-width:220px;";
     btn.onclick = async () => {
       try {
         const g = await Online.getGame(online.id);
-        if (g && g.sha !== online.sha) onRemote(g); else banner("No update yet — still " + who + "'s turn.");
+        if (g && g.sha !== online.sha) onRemote(g); else banner("No update yet — still " + esc(who) + "'s turn.");
       } catch (e) { banner(e.message); }
     };
     d.appendChild(btn);
@@ -1943,7 +1957,7 @@ window.UI = (function () {
     d.appendChild(inv);
     d.appendChild(div("panel-cta", "You can close the app — resume from CONTINUE any time."));
     sidePanel(d);
-    banner(`Watching <b>${who}</b>…`, true);
+    banner(`Watching <b>${esc(who)}</b>…`, true);
     Online.startSpectating(online.id, online.sha, onRemote);
   }
 
@@ -1956,7 +1970,7 @@ window.UI = (function () {
       if (!skipRestore) { game = Game.restore(g.data.snap, MAP); game.title = g.data.title; }
       board.setGame(game); topBar();
       const who = (online.seatNames && online.seatNames[otherSeat()]) || "opponent";
-      banner(`Watching <b>${who}</b> — ${PHASE_LABEL[g.data.phase] || ""}…`, true);
+      banner(`Watching <b>${esc(who)}</b> — ${PHASE_LABEL[g.data.phase] || ""}…`, true);
       if (!Online.isSpectating()) Online.startSpectating(online.id, online.sha, onRemote);
       return;
     }
@@ -1972,9 +1986,9 @@ window.UI = (function () {
     const rep = g.data.summary || [];
     const body = div("");
     body.appendChild(div("modal-note",
-      `<b>${(online.seatNames && online.seatNames[otherSeat()]) || "Your opponent"}</b> finished. What happened:`));
-    body.appendChild(div("log-view", rep.map(x => `<div>${x}</div>`).join("") || "<i>No battles this round.</i>"));
-    openModal("IT'S YOUR TURN — " + game.title.toUpperCase(), body,
+      `<b>${esc((online.seatNames && online.seatNames[otherSeat()]) || "Your opponent")}</b> finished. What happened:`));
+    body.appendChild(div("log-view", rep.map(x => `<div>${esc(x)}</div>`).join("") || "<i>No battles this round.</i>"));
+    openModal("IT'S YOUR TURN — " + esc(game.title.toUpperCase()), body,
       [{ label: "PLAY", cls: "primary" }]).then(() => startPhase());
   }
 
@@ -2043,6 +2057,39 @@ window.UI = (function () {
   const TOKEN_EXPIRES = "August 2, 2027"; // the axis_multiplayer fine-grained token
   const ADMIN_SB_KEY = "axis.admin.superBomber";
   const adminSuperBomber = () => { try { return localStorage.getItem(ADMIN_SB_KEY) === "1"; } catch (e) { return false; } };
+  // Online multiplayer is OFF by default — solo/hotseat need none of it. Enabling it is an
+  // explicit, informed choice (it involves a GitHub token). Gate the home-screen entry points.
+  const ONLINE_KEY = "axis.online.enabled";
+  const onlineEnabled = () => { try { return localStorage.getItem(ONLINE_KEY) === "1"; } catch (e) { return false; } };
+  const setOnlineEnabled = (on) => { try { localStorage.setItem(ONLINE_KEY, on ? "1" : "0"); } catch (e) {} };
+  // Explainer shown when a locked online button is tapped: what it needs, and the risk.
+  function onlineDisabledInfo() {
+    const body = div("");
+    body.innerHTML = `<div class="modal-note" style="text-align:left">
+      <b>🌐 Online multiplayer is turned OFF.</b> Solo (vs computer) and <b>hotseat</b> (two people,
+      one device) need none of this — they run 100% on this device, offline, with no GitHub and no
+      account.<br><br>
+      Turning it on lets two people play from <b>two devices</b>. It needs:
+      <ul style="margin:6px 0 0 18px">
+        <li>A <b>separate, PRIVATE</b> GitHub repo used only as a mailbox for game files.
+          A <b>public repo is NOT required — and must not be used</b>: on a public repo your games
+          would be world-readable and joinable by anyone.</li>
+        <li>A <b>fine-grained</b> GitHub token scoped to just that one repo, with an expiry
+          (the app hard-blocks broad, account-wide tokens).</li>
+      </ul><br>
+      <b>The risk:</b> the invite link carries that token, so <b>anyone who sees the link</b> can
+      read/write that one mailbox repo — treat links like a password. It can <u>never</u> reach your
+      main GitHub account (that's the point of a dedicated throwaway account + narrowly-scoped token).
+      Also, an opponent's game data is untrusted input your app renders.<br><br>
+      Enable it below, then use <b>Online Setup</b> to paste your token.
+    </div>`;
+    return openModal("🌐 ONLINE MULTIPLAYER — OFF", body, [
+      { label: "ENABLE ONLINE PLAY", cls: "primary", value: "enable" },
+      { label: "NOT NOW", value: null },
+    ]).then((v) => {
+      if (v === "enable") { setOnlineEnabled(true); refreshHome(); banner("Online play enabled — set up your token in Online Setup."); openOnlineSetup(); }
+    });
+  }
   function openAdminPanel() {
     const body = div("");
     body.innerHTML = `
@@ -2061,6 +2108,12 @@ window.UI = (function () {
       </div>
       <div class="admin-sec">
         <h3 class="admin-h">🌐 Online multiplayer — how it works</h3>
+        <label class="setting" style="text-align:left">
+          <input type="checkbox" id="admin-online"> <b>Enable online multiplayer</b> — off by default.
+          When off, the two 🌐 buttons on the home screen are grayed out (solo &amp; hotseat still work
+          fully). Turn on only if you'll play across two devices; it needs a <b>private</b> relay repo
+          + a fine-grained token (a <b>public repo is not required and must not be used</b>).
+        </label>
         <div class="modal-note" style="text-align:left">
           <b>Solo (vs computer)</b> and <b>hotseat</b> (two people, one device) are
           <b>100% local</b> — no internet or GitHub, ever.<br><br>
@@ -2085,6 +2138,10 @@ window.UI = (function () {
     cb.checked = adminSuperBomber();
     cb.onchange = () => { try { localStorage.setItem(ADMIN_SB_KEY, cb.checked ? "1" : "0"); } catch (e) {}
       banner(cb.checked ? "USA Super Bomber enabled — turn it on in game setup." : "USA Super Bomber disabled."); };
+    const olcb = body.querySelector("#admin-online");
+    olcb.checked = onlineEnabled();
+    olcb.onchange = () => { setOnlineEnabled(olcb.checked); refreshHome();
+      banner(olcb.checked ? "Online multiplayer enabled." : "Online multiplayer disabled — home buttons grayed out."); };
     return openModal("⚙ ADMIN", body, [
       { label: "OPEN ONLINE SETUP", value: "setup" },
       { label: "CLOSE", cls: "primary", value: "close" },
@@ -2096,10 +2153,16 @@ window.UI = (function () {
     const has = !!localStorage.getItem(saveKey);
     $("#btn-continue").style.display = has ? "" : "none";
     const del = $("#btn-delete-save"); if (del) del.style.display = has ? "" : "none";
+    // gray out the online buttons until online play is explicitly enabled (they stay tappable
+    // so a tap explains what's needed and offers to turn it on)
+    const onl = onlineEnabled();
+    for (const sel of ["#btn-online-new", "#btn-online-join"]) {
+      const b = $(sel); if (b) { b.classList.toggle("locked", !onl); b.title = onl ? "" : "Online play is off — tap to learn how to enable it"; }
+    }
     if (has) {
       try {
         const d = JSON.parse(localStorage.getItem(saveKey));
-        $("#btn-continue").innerHTML = `CONTINUE — <small>${d.title}${d.online ? " · 🌐 " + d.online.id : ""}</small>`;
+        $("#btn-continue").innerHTML = `CONTINUE — <small>${esc(d.title)}${d.online ? " · 🌐 " + esc(d.online.id) : ""}</small>`;
       } catch (e) {}
     }
   }
@@ -2112,9 +2175,14 @@ window.UI = (function () {
     // invite link? (#join=ID&k=TOKEN) — scrub it from the URL, then auto-join
     if (location.hash.startsWith("#join=")) {
       const h = new URLSearchParams(location.hash.slice(1));
-      const id = (h.get("join") || "").toUpperCase(), key = h.get("k"), r = h.get("r");
+      const rawId = (h.get("join") || "").toUpperCase();
+      // the id comes from an untrusted invite link — allow only the safe game-id charset so a
+      // crafted link can't smuggle markup into any label/banner that later shows the id
+      const id = /^[A-Z0-9-]{1,40}$/.test(rawId) ? rawId : "";
+      const key = h.get("k"), r = h.get("r");
       history.replaceState(null, "", location.pathname + location.search);
       if (id) setTimeout(() => handleInvite(id, key, r), 50);
+      else if (rawId) banner("That invite link looks malformed.");
     }
     $("#btn-new").onclick = () => {
       territoryOverrides = {}; online = null; onlineCreateMode = false;
@@ -2125,15 +2193,15 @@ window.UI = (function () {
       let d = null; try { d = JSON.parse(localStorage.getItem(saveKey) || "null"); } catch (e) {}
       const isOnline = d && d.online;
       const sure = await confirmModal("DELETE SAVED GAME?",
-        (d ? `Delete "<b>${d.title || "your game"}</b>" from this device? ` : "Delete the saved game? ") +
+        (d ? `Delete "<b>${esc(d.title || "your game")}</b>" from this device? ` : "Delete the saved game? ") +
         (isOnline ? "This removes it from this device only — the online game still lives on GitHub (use 🌐 MY ONLINE GAMES to delete it for both players)."
                   : "This cannot be undone."));
       if (!sure) return;
       localStorage.removeItem(saveKey);
       banner("Saved game deleted."); refreshHome();
     };
-    $("#btn-online-new").onclick = openOnlineCreate;
-    $("#btn-online-join").onclick = openOnlineGames;
+    $("#btn-online-new").onclick = () => onlineEnabled() ? openOnlineCreate() : onlineDisabledInfo();
+    $("#btn-online-join").onclick = () => onlineEnabled() ? openOnlineGames() : onlineDisabledInfo();
     $("#btn-admin").onclick = openAdminPanel;
     $("#btn-edit-territories").onclick = openTerritoryEditor;
     $("#custom-territories").addEventListener("change", (e) => {
