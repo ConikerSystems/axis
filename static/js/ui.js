@@ -97,7 +97,7 @@ window.UI = (function () {
     factory: "Builds new units each turn, up to the territory's income value.",
     fighter: "Versatile aircraft (def 4); escorts, intercepts, lands after combat.",
     bomber: "Long range, hits hard (atk 4), and can run strategic bombing raids.",
-    superbomber: "USA super weapon: flies 8, carries a man, and is IMMUNE to AA. Its strike ALWAYS wipes out every enemy force (and the complex) at the target — land or sea — then the man seizes the territory. (It must still land somewhere friendly.)",
+    superbomber: "USA super weapon: flies 8, carries a man, and is IMMUNE to AA. Its strike ALWAYS wipes out every enemy force at the target — land or sea — then the man seizes the territory. The industrial complex is left standing and captured, not destroyed. (It must still land somewhere friendly.)",
     submarine: "Surprise first strike; can submerge to slip away from battle.",
     transport: "Ferries land units across the sea; has no attack of its own.",
     destroyer: "Anti-submarine screen — cancels enemy sub surprise strikes.",
@@ -1872,8 +1872,9 @@ window.UI = (function () {
         <label class="setting" style="text-align:left">
           <input type="checkbox" id="admin-superbomber"> <b>🛩 USA Super Bomber</b> — when ON, the
           <b>USA Super Bomber</b> option appears in game setup (hotseat &amp; online). Flies 8, carries a
-          man, and is <b>immune to AA</b>; its strike <b>always</b> wipes out every enemy piece (and the
-          complex) at the target — land or sea — then the man seizes the territory. Replaces the US
+          man, and is <b>immune to AA</b>; its strike <b>always</b> wipes out every enemy piece at the
+          target — land or sea — then the man seizes the territory. The <b>industrial complex is left
+          standing</b> and captured, not destroyed. Replaces the US
           bomber (cost 15); existing US bombers upgrade for +3.
         </label>
       </div>

@@ -37,9 +37,23 @@
       this.attacker = game.current;
 
       // amphibious cargo only lands if its transport is still alive in a declared staging zone
+      // AND that sea zone has been cleared of enemy surface warships. Per the rulebook you must
+      // defeat any defending destroyers/cruisers/battleships/carriers before offloading; subs and
+      // enemy transports don't block. Sea battles resolve before land battles (see battle order),
+      // so a warship still alive in the staging zone means the assault from it is repelled.
       const assault = game.assaults[spaceId];
-      this.amphibUnits = game.units.filter(u => !u.dead && u.amphibTarget === spaceId &&
+      const zoneBlocked = (zone) => game.unitsAt(zone, x =>
+        !game.isFriendly(this.attacker, x.power) && UNITS[x.type].sea &&
+        !UNITS[x.type].sub && !UNITS[x.type].transport).length > 0;
+      const declaredAmphib = game.units.filter(u => !u.dead && u.amphibTarget === spaceId &&
         assault && assault.from[u.space]);
+      this.amphibUnits = declaredAmphib.filter(u => !zoneBlocked(u.space));
+      const repelled = declaredAmphib.filter(u => zoneBlocked(u.space));
+      if (repelled.length) {
+        const zone = game.space(repelled[0].space).name;
+        this._ev("info", { text: "Amphibious assault repelled — enemy warships still control " + zone +
+          "; the troops stay aboard their transports." });
+      }
       // fighters still aboard a carrier are cargo — they fight only if they launched (moved off)
       this.att = game.unitsAt(spaceId, u => u.power === this.attacker &&
         !UNITS[u.type].facility && !u.onTransport && !u.sbrDone && !u.onCarrier);
@@ -232,8 +246,7 @@
           sbs.forEach(b => b.superFired = true);
           this._ev("dice", { side: "attacker", label: "Super Bomber strike", dice: sbs.map(() => 6), hits: 1 });
           for (const u of this.def) if (!u.dead) this._reallyKill(u);         // all defenders
-          for (const f of g.unitsAt(this.space, u => UNITS[u.type].facility &&
-            !g.isFriendly(this.attacker, u.power))) f.dead = true;            // and the complex
+          // the industrial complex SURVIVES — it's captured (below), not destroyed
           this._ev("info", { text: "Super Bomber annihilates all forces at " + this.s.name });
           if (!this.sea) {
             const man = g._spawn("infantry", this.attacker, this.space);      // the carried man
@@ -513,7 +526,7 @@
         // a Super Bomber over an undefended enemy territory drops its carried man to seize it
         const man = this._spawn("infantry", power, b.space); man.moved = 1; man.fromSuperBomber = true;
         this.captureTerritory(b.space, power);
-        for (const f of this.unitsAt(b.space, u => u.type === "factory")) f.dead = true;
+        for (const f of this.unitsAt(b.space, u => u.type === "factory")) f.power = this.owner[b.space]; // complex captured, not destroyed
         b.resolved = true;
       }
     }

@@ -266,6 +266,28 @@ t("transport retreat from sea combat cancels the amphibious landing", () => {
     eq(g.owner["egypt"], "uk", "egypt still British");
   } else ok(tr.dead || b.done, "transport died before retreating — also legal");
 });
+t("amphibious landing is repelled while an enemy surface warship holds the sea zone", () => {
+  const g = mk(); g.turnIndex = 1; g.phase = "combat"; // germany
+  for (const u of g.unitsAt("sz17")) u.dead = true;
+  g.units = g.units.filter(u => !u.dead);
+  const tr = g._spawn("transport", "germany", "sz17");
+  const inf = g._spawn("infantry", "germany", "sz17"); inf.onTransport = tr.id;
+  const dd = g._spawn("destroyer", "uk", "sz17"); // enemy warship survived the sea battle
+  // a declared amphibious assault from sz17 onto UK-held Egypt
+  g.assaults = { egypt: { from: { sz17: true }, units: [] } };
+  inf.amphibTarget = "egypt";
+  const b = new Combat.Battle(g, "egypt");
+  eq(b.amphibUnits.length, 0, "cargo cannot land through an uncleared sea zone");
+  ok(b.events.some(e => e.type === "info" && /repelled/i.test(e.text)), "player is told the assault was repelled");
+  ok(!inf.dead, "the troops survive");
+  eq(inf.onTransport, tr.id, "the troops stay aboard their transport");
+  eq(g.owner["egypt"], "uk", "Egypt is not captured");
+  // subs do NOT block an amphibious assault: swap the destroyer for a sub and it lands
+  dd.dead = true; g.units = g.units.filter(u => !u.dead);
+  g._spawn("submarine", "uk", "sz17");
+  const b2 = new Combat.Battle(g, "egypt");
+  eq(b2.amphibUnits.length, 1, "a lurking submarine does not stop the landing");
+});
 t("amphib chain is generic: US assaults Morocco across the Atlantic", () => {
   const g = mk({ seed: 13 }); g.turnIndex = 4; g._snapshotTurnStart(); g.phase = "combatMove"; // US
   for (const u of g.unitsAt("sz12").concat(g.unitsAt("sz13"))) u.dead = true;

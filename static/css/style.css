@@ -131,14 +131,15 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
    map — just left of the side panel so it isn't hidden behind it. Both are draggable. */
 .zoom-ctrls { left: 12px; bottom: 92px; }
 .pan-ctrls { right: 358px; bottom: 14px; }
+/* Solid backgrounds (no backdrop-filter blur): blur forces a full-screen repaint on
+   iOS every frame the control moves or the map pans beneath it — costly on iPad. The
+   opaque charcoal reads just as well over the map. */
 .bc-grip { align-self: stretch; height: 22px; display: flex; align-items: center; justify-content: center;
   color: var(--gold); font-size: 1rem; letter-spacing: 3px; cursor: move; touch-action: none;
-  background: rgba(20,22,26,.62); border: 1px solid var(--gold-dim); border-radius: 8px;
-  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+  background: rgba(20,22,26,.86); border: 1px solid var(--gold-dim); border-radius: 8px; }
 .bc-btn { border-radius: 10px; border: 1px solid var(--gold-dim);
-  background: rgba(20,22,26,.58); color: var(--gold); font-weight: 800;
-  display: flex; align-items: center; justify-content: center; cursor: pointer;
-  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+  background: rgba(20,22,26,.84); color: var(--gold); font-weight: 800;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .bc-btn:active { background: rgba(232,178,58,.28); }
 /* zoom group: magnifier icon + a big legible sign */
 .bc-zoom { display: flex; flex-direction: column; gap: 8px; }
@@ -220,6 +221,12 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
 @keyframes hiPulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
 .hi.attack, .hi.target, .hi.place { animation: hiPulse 1.2s ease-in-out infinite; }
 .hi-badge { pointer-events: none; animation: hiPulse 1.2s ease-in-out infinite; }
+/* On touch devices, pulsing the large translucent fill paths composites the whole
+   map every frame. Keep the small center badges pulsing (they locate the target) but
+   hold the big fills steady — much lighter for the iPad GPU. */
+@media (pointer: coarse) {
+  .hi.attack, .hi.target, .hi.place { animation: none; }
+}
 .hi-badge-bg { stroke-width: 2.2; }
 .hi-badge-bg.attack { fill: rgba(196, 40, 30, .95); stroke: #ffc4b7; }
 .hi-badge-bg.target { fill: rgba(168, 126, 34, .95); stroke: #ffe9a8; }
