@@ -24,8 +24,9 @@
     fighter: { cost: 10, move: 4, attack: 3, defense: 4, air: true },
     bomber: { cost: 12, move: 6, attack: 4, defense: 1, air: true },
     // USA-only Super Bomber (Admin option). Carries a man (the +3 over a bomber),
-    // flies 8, and on attack makes one super-strike roll (see combat.js).
-    superbomber: { cost: 15, move: 8, attack: 4, defense: 1, air: true, superBomber: true },
+    // flies 12, is immune to AA, and on attack ALWAYS wins its super-strike — it
+    // annihilates every enemy piece at the target and leaves the IC standing (see combat.js).
+    superbomber: { cost: 15, move: 12, attack: 4, defense: 1, air: true, superBomber: true },
     submarine: { cost: 6, move: 2, attack: 2, defense: 1, sea: true, sub: true },
     transport: { cost: 7, move: 2, attack: 0, defense: 0, sea: true, transport: true, capacity: true },
     destroyer: { cost: 8, move: 2, attack: 2, defense: 2, sea: true, surface: true, antiSub: true },
@@ -170,6 +171,13 @@
       this.seaHostileAtStart = new Set();
       for (const [id, s] of Object.entries(this.map.spaces))
         if (s.sea && this.isHostileSpace(p, id)) this.seaHostileAtStart.add(id);
+      // USA Super Bomber: when the option is on, EVERY US bomber is a super bomber —
+      // uniform power so there's never a weaker bomber that could lose. Free auto-upgrade
+      // at the start of the US turn (new US purchases are already super bombers).
+      if (this.options && this.options.superBomber && p === "us") {
+        for (const u of this.units)
+          if (!u.dead && u.power === "us" && u.type === "bomber") u.type = "superbomber";
+      }
     }
 
     // ---------- canals & adjacency for sea movement ----------
@@ -476,8 +484,8 @@
             if (!(onlyTransports && canAttack)) continue;
           }
           contested.add(at);
-        } else if (!s.sea && this.isHostileSpace(power, at) && !UNITS[u.type].air) {
-          contested.add(at); // empty hostile territory (capture)
+        } else if (!s.sea && this.isHostileSpace(power, at) && (!UNITS[u.type].air || u.type === "superbomber")) {
+          contested.add(at); // empty hostile territory (capture) — a Super Bomber's carried man can seize it too
         }
       }
       for (const id of contested) this.battles.push({ space: id, sea: !!this.space(id).sea,
