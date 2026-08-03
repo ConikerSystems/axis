@@ -456,6 +456,49 @@
       if (this.declaredSeaAttacks.has(spaceId)) this.declaredSeaAttacks.delete(spaceId);
       else this.declaredSeaAttacks.add(spaceId);
     }
+    // Is the current power set to attack this space this combat-move phase? (units moved
+    // in, an amphibious assault declared, or an optional sub/transport attack declared.)
+    hasPendingAttack(spaceId) {
+      if (this.phase !== "combatMove") return false;
+      const power = this.current;
+      if (this.assaults[spaceId]) return true;
+      if (this.declaredSeaAttacks.has(spaceId)) return true;
+      return this.unitsAt(spaceId, u => u.power === power &&
+        !u.onTransport && !u.onCarrier && u.moved > 0).length > 0;
+    }
+    // Cancel just this one space's attack: send every attacker that moved in back to where
+    // it started (with its riders), drop any raid/amphibious/sea declaration on it, and free
+    // the pieces to do something else — without touching any other declared attack.
+    cancelAttack(spaceId) {
+      if (this.phase !== "combatMove") throw new Error("wrong phase");
+      const power = this.current;
+      const backedIds = new Set();
+      let changed = false;
+      for (const u of this.units) {
+        if (u.dead || u.power !== power || u.onTransport || u.onCarrier) continue;
+        if (u.space !== spaceId || u.moved <= 0) continue;
+        const origin = (u.movePath && u.movePath.length) ? u.movePath[0] : spaceId;
+        if (origin !== spaceId) {
+          u.space = origin;
+          if (UNITS[u.type].carrier) for (const f of this.carrierFighters(u)) f.space = origin;
+          if (UNITS[u.type].transport || UNITS[u.type].capacity) for (const c of this.cargoOf(u)) c.space = origin;
+        }
+        u.moved = 0; delete u.movePath; delete u.sbr; delete u.amphibTarget;
+        backedIds.add(u.id); changed = true;
+      }
+      // amphibious assault on here → cancel it; the troops stay aboard their transports,
+      // which are freed to offload again elsewhere this turn
+      if (this.assaults[spaceId]) {
+        for (const u of this.units) if (u.amphibTarget === spaceId) delete u.amphibTarget;
+        for (const z of Object.keys(this.assaults[spaceId].from || {}))
+          for (const t of this.unitsAt(z, x => x.type === "transport" && x.power === power)) delete t.usedThisTurn;
+        delete this.assaults[spaceId]; changed = true;
+      }
+      if (this.declaredSeaAttacks.has(spaceId)) { this.declaredSeaAttacks.delete(spaceId); changed = true; }
+      if (backedIds.size) this.moves = this.moves.filter(m => !backedIds.has(m.unitId));
+      if (!changed) throw new Error("no attack to cancel here");
+      this._log(`Attack on ${this.space(spaceId).name} cancelled`);
+    }
     endCombatMove() {
       // blitz sweep: tanks capture empty hostile territories they passed through
       for (const u of this.units) {

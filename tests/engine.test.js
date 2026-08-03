@@ -698,5 +698,29 @@ t("aircraft may not sit at sea alone; a fighter may land on a friendly carrier (
   eq(g.reachable(bmb, "noncombatMove").get(seaZone).endOk, false, "a bomber may never end at sea");
 });
 
+t("cancelAttack reverses just one territory's attack, leaving other attacks intact", () => {
+  const g = mk(); g.turnIndex = 1; g.phase = "combatMove"; // germany
+  const findMove = (exclude) => {
+    for (const u of g.units) {
+      if (u.dead || u.power !== "germany" || u.moved > 0 || !UNITS[u.type].land || UNITS[u.type].aa) continue;
+      if (MAP.spaces[u.space].sea) continue;
+      for (const [id, v] of g.reachable(u, "combatMove"))
+        if (v.endOk !== false && v.hostile && !MAP.spaces[id].sea && id !== exclude) return { u, from: u.space, to: id };
+    }
+    return null;
+  };
+  const m1 = findMove(null); ok(m1, "found a first attack");
+  g.moveUnit(m1.u.id, m1.to, "combatMove");
+  const m2 = findMove(m1.to); ok(m2 && m2.u.id !== m1.u.id, "found a second, different attack");
+  g.moveUnit(m2.u.id, m2.to, "combatMove");
+  ok(g.hasPendingAttack(m1.to) && g.hasPendingAttack(m2.to), "both attacks are pending");
+  g.cancelAttack(m1.to); // cancel ONLY the first
+  eq(m1.u.space, m1.from, "first attacker returned to its origin");
+  eq(m1.u.moved, 0, "first attacker's move is reset (free to move again)");
+  ok(!g.hasPendingAttack(m1.to), "first attack is cancelled");
+  eq(m2.u.space, m2.to, "second attacker is untouched");
+  ok(g.hasPendingAttack(m2.to), "second attack is still pending");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
