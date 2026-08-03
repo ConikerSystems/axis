@@ -963,6 +963,9 @@ window.UI = (function () {
       if (s.sea && game.hasEnemyUnits(game.current, id) && !game.isHostileSpace(game.current, id) &&
         game.unitsAt(id, u => u.power === game.current).length)
         buttons.unshift({ label: game.declaredSeaAttacks.has(id) ? "CANCEL ATTACK ON SUBS/TRANSPORTS" : "⚔ ATTACK SUBS/TRANSPORTS HERE", cls: "primary", value: "seaAtk" });
+      // cancel just THIS territory's attack (send its attackers back), leaving other attacks intact
+      if (game.hasPendingAttack(id))
+        buttons.unshift({ label: "✖ CANCEL THIS ATTACK", cls: "danger", value: "cancelAttack" });
     }
     openModal(s.name.toUpperCase(), body, buttons).then((v) => {
       if (v === "sbr") {
@@ -977,6 +980,12 @@ window.UI = (function () {
         banner("Bomber will attack " + s.name + " (raid cancelled).");
       }
       if (v === "seaAtk") { game.toggleSeaAttack(id); banner(game.declaredSeaAttacks.has(id) ? "Attack declared" : "Attack cancelled"); }
+      if (v === "cancelAttack") {
+        undoStack.push(game.snapshot());
+        try { game.cancelAttack(id); board.render(); topBar();
+          banner("Attack on " + s.name + " cancelled — pieces sent back."); }
+        catch (e) { undoStack.pop(); banner(e.message); }
+      }
       if (v === "movePick") openMovePicker(id, game.current, null);
     });
   }
