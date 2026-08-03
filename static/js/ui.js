@@ -1284,10 +1284,43 @@ window.UI = (function () {
     sidePanel(d);
   }
 
+  // Monte-Carlo win odds: replay this exact battle many times on throwaway clones of the
+  // game (real combat rules — subs, AA, two-hit ships, artillery, super bombers all apply),
+  // with the attacker pressing to the finish and casualties taken cheapest-first. Not a raid.
+  function computeOdds(bRec) {
+    if (bRec.sbr) return null;
+    const N = 400;
+    const baseSnap = game.snapshot();
+    let attWin = 0, defHold = 0, mutual = 0, done = 0;
+    for (let i = 0; i < N; i++) {
+      let g, b;
+      try {
+        g = Game.restore(baseSnap, MAP);
+        g.roll = (n) => { const a = []; for (let k = 0; k < n; k++) a.push(1 + (Math.random() * 6 | 0)); return a; };
+        b = new Combat.Battle(g, bRec.space, { sbr: false });
+        let d, guard = 0;
+        while ((d = b.pending()) && guard++ < 400) {
+          b.decide(d.type === "retreat" ? {} : { units: [] }); // press on; auto cheapest casualties; don't submerge
+        }
+      } catch (e) { continue; }
+      done++;
+      const defLeft = g.unitsAt(bRec.space, u => !u.dead && !g.isFriendly(b.attacker, u.power) && !UNITS[u.type].facility).length;
+      const attLeft = b.att.filter(u => !u.dead && !UNITS[u.type].facility).length;
+      if (defLeft === 0 && attLeft > 0) attWin++;
+      else if (attLeft === 0) defHold++;
+      else if (defLeft === 0) mutual++;
+      else defHold++;
+    }
+    if (!done) return null;
+    const pct = (x) => Math.round(100 * x / done);
+    return { N: done, attPct: pct(attWin), defPct: pct(defHold), tiePct: pct(mutual) };
+  }
+
   async function runBattle(bRec) {
+    const odds = computeOdds(bRec); // simulate BEFORE the real battle mutates game state
     const battle = new Combat.Battle(game, bRec.space, { sbr: bRec.sbr });
     const att0 = battle.att.slice(), def0 = battle.def.slice();
-    const modal = battleModalShell(bRec, battle);
+    const modal = battleModalShell(bRec, battle, odds);
     let d;
     let evCursor = 0;
     const flushEvents = () => {
@@ -1317,10 +1350,22 @@ window.UI = (function () {
     await modal.finish(battle);
   }
 
-  function battleModalShell(bRec, battle) {
+  function battleModalShell(bRec, battle, odds) {
     const s = MAP.spaces[bRec.space];
     const wrap = div("battle-modal");
     const head = div("battle-head", `<h3>${bRec.sbr ? "STRATEGIC BOMBING — " : "BATTLE OF "}${s.name.toUpperCase()}</h3>`);
+    if (odds) {
+      const oddsEl = div("battle-odds");
+      oddsEl.innerHTML =
+        `<div class="odds-label">WIN CHANCE <small>if fought to the finish · ${odds.N} simulations</small></div>
+         <div class="odds-bar">
+           <span class="odds-att" style="width:${odds.attPct}%">${odds.attPct >= 12 ? odds.attPct + "%" : ""}</span>
+           <span class="odds-tie" style="width:${odds.tiePct}%"></span>
+           <span class="odds-def" style="width:${odds.defPct}%">${odds.defPct >= 12 ? odds.defPct + "%" : ""}</span>
+         </div>
+         <div class="odds-legend"><span class="k att"></span>Attacker ${odds.attPct}% · <span class="k def"></span>Defender ${odds.defPct}%${odds.tiePct ? ` · <span class="k tie"></span>Mutual loss ${odds.tiePct}%` : ""}</div>`;
+      head.appendChild(oddsEl);
+    }
     const sides = div("battle-sides");
     const attEl = div("battle-side att"), defEl = div("battle-side def");
     sides.appendChild(attEl); sides.appendChild(defEl);
