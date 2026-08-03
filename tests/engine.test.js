@@ -604,5 +604,23 @@ t("snapshot / restore roundtrip", () => {
   ok(g2.reachable(inf, "combatMove").has("finland"), "restored game is functional");
 });
 
+t("lone enemy transport is auto-attacked and sunk (no declaration needed)", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "combatMove"; // US
+  const dd = g._spawn("destroyer", "us", "sz62"); dd.moved = 1;
+  const tr = g._spawn("transport", "japan", "sz62");
+  g.endCombatMove();
+  ok(g.battles.some(b => b.space === "sz62"), "battle auto-created for the lone transport");
+  g.phase = "combat";
+  autoBattle(g, "sz62");
+  ok(tr.dead, "defenseless transport destroyed");
+});
+t("a protecting enemy sub still requires an explicit declaration", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "combatMove";
+  const dd = g._spawn("destroyer", "us", "sz62"); dd.moved = 1;
+  g._spawn("submarine", "japan", "sz62");
+  g.endCombatMove();
+  ok(!g.battles.some(b => b.space === "sz62"), "no auto battle when a sub is present (may bypass)");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
