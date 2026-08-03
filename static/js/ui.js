@@ -1024,11 +1024,15 @@ window.UI = (function () {
   const isMovePhase = () => game && (game.phase === "combatMove" || game.phase === "noncombatMove") &&
     game.players[game.current].type === "human" && iControl(game.current);
 
-  function onDragStart(spaceId, power) {
+  function onDragStart(spaceId, power, type) {
     if (!isMovePhase() || power !== game.current) return null;
     const targets = new Set();
+    // Land: dragging a piece moves only THAT piece type — not the whole territory's stack.
+    // Sea: dragging moves the full fleet by default (specific ships can be dropped in the
+    // move dialog, or picked one type at a time by tapping instead of dragging).
+    const onlyType = MAP.spaces[spaceId].sea ? null : type;
     const movers = game.unitsAt(spaceId, u => u.power === power && !UNITS[u.type].facility &&
-      !u.onTransport && !u.onCarrier);
+      !u.onTransport && !u.onCarrier && (!onlyType || u.type === onlyType));
     for (const u of movers) {
       for (const [id, info] of game.reachable(u, game.phase)) { if (info.endOk === false) continue; targets.add(id); }
     }
@@ -1063,10 +1067,12 @@ window.UI = (function () {
     return groups;
   }
   // what could each unit type at `from` do if sent to `to`? → [{type, mode, eligible}]
-  function rowsFor(from, to, power) {
+  // onlyType restricts to a single piece type (used for land drags — see onDrop).
+  function rowsFor(from, to, power, onlyType) {
     const toSpace = MAP.spaces[to];
     const rows = [];
     for (const [type, list] of Object.entries(moverGroups(from, power))) {
+      if (onlyType && type !== onlyType) continue;
       const info = UNITS[type];
       let eligible = [], mode = "move";
       if (info.land && toSpace.sea) {
@@ -1144,10 +1150,13 @@ window.UI = (function () {
       bomberMissionDialog(to);
   }
 
-  async function onDrop(from, to, power) {
+  async function onDrop(from, to, power, type) {
     if (!isMovePhase()) return;
     const toSpace = MAP.spaces[to];
-    const rows = rowsFor(from, to, power);
+    // Land source: move only the dragged piece type. Sea source: whole fleet (pick specifics
+    // in the quantity dialog). This stops one dragged piece from grabbing the entire stack.
+    const onlyType = MAP.spaces[from].sea ? null : type;
+    const rows = rowsFor(from, to, power, onlyType);
     if (!rows.length) return;
     // quantity dialog (skip if single unit)
     let confirmed = rows;
