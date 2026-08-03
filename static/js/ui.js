@@ -1827,6 +1827,16 @@ window.UI = (function () {
     const body = div("");
     body.innerHTML = `
       <div class="admin-sec">
+        <h3 class="admin-h">🧪 Experimental features</h3>
+        <label class="setting" style="text-align:left">
+          <input type="checkbox" id="admin-superbomber"> <b>🛩 USA Super Bomber</b> — when ON, the
+          <b>USA Super Bomber</b> option appears in game setup (hotseat &amp; online). Flies 8, carries a
+          man; one strike roll of <b>4 or less</b> wipes out every enemy piece (and the complex) at the
+          target — land or sea — then the man seizes the territory. Replaces the US bomber (cost 15);
+          existing US bombers upgrade for +3.
+        </label>
+      </div>
+      <div class="admin-sec">
         <h3 class="admin-h">🌐 Online multiplayer — how it works</h3>
         <div class="modal-note" style="text-align:left">
           <b>Solo (vs computer)</b> and <b>hotseat</b> (two people, one device) are
@@ -1847,16 +1857,6 @@ window.UI = (function () {
           Regenerate a token (sign in as the relay account first):<br>
           <code style="word-break:break-all">${TOKEN_PAGE_URL}</code>
         </div>
-      </div>
-      <div class="admin-sec">
-        <h3 class="admin-h">🧪 Experimental features</h3>
-        <label class="setting" style="text-align:left">
-          <input type="checkbox" id="admin-superbomber"> <b>🛩 USA Super Bomber</b> — when ON, the
-          <b>USA Super Bomber</b> option appears in game setup (hotseat &amp; online). Flies 8, carries a
-          man; one strike roll of <b>4 or less</b> wipes out every enemy piece (and the complex) at the
-          target — land or sea — then the man seizes the territory. Replaces the US bomber (cost 15);
-          existing US bombers upgrade for +3.
-        </label>
       </div>`;
     const cb = body.querySelector("#admin-superbomber");
     cb.checked = adminSuperBomber();
