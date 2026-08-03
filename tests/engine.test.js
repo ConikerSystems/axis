@@ -722,5 +722,21 @@ t("cancelAttack reverses just one territory's attack, leaving other attacks inta
   ok(g.hasPendingAttack(m2.to), "second attack is still pending");
 });
 
+t("AI difficulty: only a Hard computer power gets the +25% income bonus", () => {
+  const gi = Engine.POWERS.indexOf("germany");
+  const build = (lvl, type) => {
+    const players = {}; for (const p of Engine.POWERS) players[p] = { type, name: p };
+    const g = new Game({ mapData: MAP, seed: 1, players, options: { aiLevel: lvl } });
+    g.turnIndex = gi; g.phase = "income";
+    return g;
+  };
+  const base = build("normal", "ai").production("germany");
+  const collect = (g) => { const b = g.ipc.germany; g.collectIncome(); return g.ipc.germany - b; };
+  eq(collect(build("hard", "ai")), Math.round(base * 1.25), "Hard AI collects +25%");
+  eq(collect(build("normal", "ai")), base, "Normal AI collects the base amount");
+  eq(collect(build("easy", "ai")), base, "Easy AI collects the base amount");
+  eq(collect(build("hard", "human")), base, "a human power gets no bonus even at Hard");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

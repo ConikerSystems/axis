@@ -15,7 +15,7 @@ for (let game = 0; game < GAMES; game++) {
   const seed = 1000 + game * 77;
   const players = {};
   for (const p of Engine.POWERS) players[p] = { type: "ai", name: "AI " + p };
-  const g = new Engine.Game({ mapData: window.MAP_DATA, seed, players });
+  const g = new Engine.Game({ mapData: window.MAP_DATA, seed, players, options: { aiLevel: process.env.AI_LEVEL || "normal" } });
   let turns = 0;
   try {
     while (g.round <= ROUNDS && !g.winner) {

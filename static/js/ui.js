@@ -230,6 +230,7 @@ window.UI = (function () {
       interceptors: $("#opt-interceptors").checked,
       totalVictory: $("#opt-total").checked,
       superBomber: !!($("#opt-superbomber") && $("#opt-superbomber").checked),
+      aiLevel: ($("#opt-ailevel") && $("#opt-ailevel").value) || "normal",
     };
     const overrides = $("#custom-territories").checked ? territoryOverrides : {};
     game = new Game({ mapData: MAP, players, options, territoryOverrides: overrides });
