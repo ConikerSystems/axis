@@ -942,21 +942,41 @@ window.UI = (function () {
       buttons.unshift({ label: "➤ MOVE UNITS", cls: "primary", value: "movePick" });
     // special orders in combat move
     if (game.phase === "combatMove" && game.players[game.current].type === "human") {
-      // Only PLAIN bombers do strategic bombing raids. A Super Bomber never bombs an IC
-      // for damage — it always makes its annihilating strike (wipes every enemy piece and
-      // captures the territory, leaving the complex standing), so it attacks normally.
-      const myBombers = game.unitsAt(id, u => u.power === game.current && u.type === "bomber" && !u.sbr);
+      // A bomber sitting over an enemy Industrial Complex — plain OR super — chooses its
+      // mission: ATTACK (join the battle; a Super Bomber's strike wipes the defenders and
+      // captures the territory) or a STRATEGIC BOMBING RAID (damage the factory instead).
+      // Attack is the default; the raid is the opt-in alternative, shown clearly here.
       const enemyIC = !s.sea && game.isHostileSpace(game.current, id) && game.unitsAt(id, u => u.type === "factory").length;
-      if (myBombers.length && enemyIC)
-        buttons.unshift({ label: "🛩 DECLARE BOMBING RAID", cls: "primary", value: "sbr" });
+      const bombersHere = game.unitsAt(id, u => u.power === game.current && (u.type === "bomber" || u.type === "superbomber"));
+      if (enemyIC && bombersHere.length) {
+        const flagged = bombersHere.filter(u => u.sbr);
+        const hasSuper = bombersHere.some(u => u.type === "superbomber");
+        body.appendChild(div("modal-note",
+          "🛩 <b>Bomber over an enemy Industrial Complex</b> — choose its mission:<br>" +
+          "• <b>⚔ Attack</b> — join the battle" +
+          (hasSuper ? "; a Super Bomber's strike wipes out the defenders and captures the territory (the complex is left standing)." : ".") +
+          "<br>• <b>🛩 Strategic Bombing Raid</b> — bomb the factory for damage instead of fighting." +
+          `<br><i>Currently: ${flagged.length ? "Strategic Bombing Raid" : "Attack"}.</i>`));
+        if (flagged.length < bombersHere.length)
+          buttons.unshift({ label: "🛩 STRATEGIC BOMBING RAID", cls: "primary", value: "sbr" });
+        if (flagged.length)
+          buttons.unshift({ label: "⚔ ATTACK (CANCEL RAID)", cls: "primary", value: "attackNoRaid" });
+      }
       if (s.sea && game.hasEnemyUnits(game.current, id) && !game.isHostileSpace(game.current, id) &&
         game.unitsAt(id, u => u.power === game.current).length)
         buttons.unshift({ label: game.declaredSeaAttacks.has(id) ? "CANCEL ATTACK ON SUBS/TRANSPORTS" : "⚔ ATTACK SUBS/TRANSPORTS HERE", cls: "primary", value: "seaAtk" });
     }
     openModal(s.name.toUpperCase(), body, buttons).then((v) => {
       if (v === "sbr") {
-        const b = game.unitsAt(id, u => u.power === game.current && u.type === "bomber" && !u.sbr)[0];
-        if (b) { try { game.setSBR(b.id); banner("Strategic bombing raid declared on " + s.name); } catch (e) { banner(e.message); } }
+        let n = 0;
+        for (const b of game.unitsAt(id, u => u.power === game.current && (u.type === "bomber" || u.type === "superbomber") && !u.sbr)) {
+          try { game.setSBR(b.id); n++; } catch (e) { banner(e.message); }
+        }
+        if (n) banner("Strategic bombing raid declared on " + s.name);
+      }
+      if (v === "attackNoRaid") {
+        for (const b of game.unitsAt(id, u => u.power === game.current && u.sbr === id)) delete b.sbr;
+        banner("Bombers will attack " + s.name + " (raid cancelled).");
       }
       if (v === "seaAtk") { game.toggleSeaAttack(id); banner(game.declaredSeaAttacks.has(id) ? "Attack declared" : "Attack cancelled"); }
       if (v === "movePick") openMovePicker(id, game.current, null);
@@ -1048,6 +1068,48 @@ window.UI = (function () {
     }
   }
 
+  // an enemy-owned, non-sea territory that holds an industrial complex
+  const isEnemyIC = (to) => { const t = MAP.spaces[to]; return t && !t.sea &&
+    game.isHostileSpace(game.current, to) && game.unitsAt(to, u => u.type === "factory").length > 0; };
+
+  // When a bomber (plain or super) is sent onto an enemy Industrial Complex, ask right
+  // away what it should do — ATTACK (join the battle; a super bomber's strike captures
+  // the territory) or a STRATEGIC BOMBING RAID (damage the factory). Attack is the default.
+  function bomberMissionDialog(id) {
+    const s = MAP.spaces[id];
+    const bombers = game.unitsAt(id, u => u.power === game.current &&
+      (u.type === "bomber" || u.type === "superbomber") && !u.sbrDone);
+    if (!bombers.length) return;
+    const hasSuper = bombers.some(u => u.type === "superbomber");
+    const many = bombers.length > 1;
+    const body = div("");
+    body.appendChild(div("modal-note",
+      `Your bomber${many ? "s" : ""} reached <b>${s.name}</b> — an enemy Industrial Complex. Choose the mission:`));
+    body.appendChild(div("modal-note",
+      "• <b>⚔ Attack</b> — join the battle" +
+      (hasSuper ? "; a Super Bomber's strike wipes out the defenders and captures the territory (the complex is left standing)." : ".") +
+      "<br>• <b>🛩 Strategic Bombing Raid</b> — bomb the factory for damage instead of fighting."));
+    openModal("BOMBER MISSION — " + s.name.toUpperCase(), body, [
+      { label: "⚔ ATTACK", cls: "primary", value: "attack" },
+      { label: "🛩 BOMBING RAID", cls: "primary", value: "sbr" },
+    ]).then((v) => {
+      if (v === "sbr") {
+        let n = 0;
+        for (const b of bombers) { try { game.setSBR(b.id); n++; } catch (e) { banner(e.message); } }
+        if (n) banner("Strategic bombing raid declared on " + s.name);
+      } else {
+        for (const b of bombers) if (b.sbr === id) delete b.sbr; // attack (default)
+      }
+      board.render();
+    });
+  }
+  // offer the mission choice if this move landed a bomber on an enemy complex
+  function maybeBomberMission(to, rows) {
+    if (game.phase === "combatMove" && isEnemyIC(to) &&
+      rows.some(r => r.take > 0 && (r.type === "bomber" || r.type === "superbomber")))
+      bomberMissionDialog(to);
+  }
+
   async function onDrop(from, to, power) {
     if (!isMovePhase()) return;
     const toSpace = MAP.spaces[to];
@@ -1063,6 +1125,7 @@ window.UI = (function () {
     board.render(); topBar();
     if (game.phase === "combatMove" && !toSpace.sea &&
       confirmed.some(r => r.mode === "offload")) banner("Amphibious assault declared on " + toSpace.name);
+    maybeBomberMission(to, confirmed);
   }
 
   // ---- tap-to-select movement (select pieces, then tap a highlighted destination) ----
@@ -1163,11 +1226,13 @@ window.UI = (function () {
     board.clearHighlight(); board.setSelected(null); banner(null);
     const rows = rowsFor(from, to, power);
     for (const r of rows) r.take = Math.min(takes[r.type] || 0, r.eligible.length);
-    performMoves(rows.filter(r => r.take > 0), to, power);
+    const moved = rows.filter(r => r.take > 0);
+    performMoves(moved, to, power);
     board.render(); topBar();
     const toSpace = MAP.spaces[to];
     if (game.phase === "combatMove" && !toSpace.sea && rows.some(r => r.take > 0 && r.mode === "offload"))
       banner("Amphibious assault declared on " + toSpace.name);
+    maybeBomberMission(to, moved);
   }
 
   function moveQuantityDialog(rows, to) {
@@ -1878,7 +1943,8 @@ window.UI = (function () {
           man, and is <b>immune to AA</b>; its strike <b>always wins</b> — it wipes out every enemy piece at the
           target (land or sea), then the man seizes the territory. The <b>industrial complex is left
           standing</b> and captured, not destroyed. <b>Every US bomber is a super bomber</b> (uniform power,
-          upgraded automatically at the US turn) and never runs an ordinary bombing raid.
+          upgraded automatically at the US turn). Over an enemy complex you choose its mission:
+          attack (the strike) or a strategic bombing raid (damage the factory).
         </label>
       </div>
       <div class="admin-sec">
