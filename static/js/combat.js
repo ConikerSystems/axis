@@ -54,7 +54,7 @@
       this.defPower = this.def.length ? this.def[0].power : (game.owner[spaceId] || null);
       this.queue = [];
       this.done = false; this.result = null;
-      if (this.sbr) { this.bombers = this.att.filter(u => u.type === "bomber" && u.sbr === spaceId); this._planSBR(); }
+      if (this.sbr) { this.bombers = this.att.filter(u => (u.type === "bomber" || u.type === "superbomber") && u.sbr === spaceId); this._planSBR(); }
       else if (!this.attAlive.length) this._finish();
       else this._planRound(true);
     }
@@ -97,8 +97,10 @@
       const q = this.queue = [];
       if (first && !this.sea) {
         if (this.def.some(u => u.type === "aaa") && this.att.some(isAir)) q.push({ step: "aaFire" });
-        if (this.g.assaults[this.space]) q.push({ step: "bombard" });
       }
+      // Super Bomber strike: one shot, after AA (so AA/fighter-soak resolves first). Land or sea.
+      if (first && this.att.some(u => u.type === "superbomber" && !u.superFired)) q.push({ step: "superStrike" });
+      if (first && !this.sea && this.g.assaults[this.space]) q.push({ step: "bombard" });
       if (this.sea) {
         const defDD = this.def.some(u => !u.dead && UNITS[u.type].antiSub);
         const attDD = this.att.some(u => !u.dead && UNITS[u.type].antiSub);
@@ -220,6 +222,33 @@
             [{ count: hits, pool: airs, immediate: true, label: "AA hits — air units" }]);
           break;
         }
+        case "superStrike": {
+          // Each surviving attacking Super Bomber gets ONE roll. Any die ≤4 annihilates
+          // every enemy unit here AND the industrial complex; on land, the carried man
+          // drops in to seize the territory. A clean miss sends the bombers home.
+          const sbs = this.attAlive.filter(u => u.type === "superbomber" && !u.superFired);
+          if (!sbs.length) break;
+          const dice = g.roll(sbs.length, "Super Bomber strike");
+          sbs.forEach(b => b.superFired = true);
+          const hit = dice.some(d => d <= 4);
+          this._ev("dice", { side: "attacker", label: "Super Bomber strike", dice, hits: hit ? 1 : 0 });
+          if (hit) {
+            for (const u of this.def) if (!u.dead) this._reallyKill(u);       // all defenders
+            for (const f of g.unitsAt(this.space, u => UNITS[u.type].facility &&
+              !g.isFriendly(this.attacker, u.power))) f.dead = true;          // and the complex
+            this._ev("info", { text: "Super Bomber annihilates all forces at " + this.s.name });
+            if (!this.sea) {
+              const man = g._spawn("infantry", this.attacker, this.space);    // the carried man
+              man.moved = 1; man.fromSuperBomber = true;
+              this.att.push(man);
+              this._ev("info", { text: "Carried infantry secures " + this.s.name });
+            }
+          } else {
+            this._ev("info", { text: "Super Bomber strike missed — flying home" });
+            for (const b of sbs) { b.superMissed = true; const i = this.att.indexOf(b); if (i >= 0) this.att.splice(i, 1); }
+          }
+          break;
+        }
         case "bombard": {
           const a = g.assaults[this.space];
           let ships = [];
@@ -283,7 +312,8 @@
           break;
         }
         case "attFire": {
-          const units = this.attAlive.filter(u => !u.submerged && u.firedSurprise !== this.round);
+          // super bombers never fire in normal rounds — they get one super-strike only
+          const units = this.attAlive.filter(u => !u.submerged && u.firedSurprise !== this.round && u.type !== "superbomber");
           if (!units.length) break;
           const { hits, detail } = this._fire(units, true);
           this._ev("dice", { side: "attacker", label: "Attacker fires", detail,
@@ -482,6 +512,13 @@
         for (const aa of defenders) aa.dead = true;
         this.captureTerritory(b.space, power);
         for (const f of this.unitsAt(b.space, u => u.type === "factory")) f.power = this.owner[b.space];
+        b.resolved = true;
+      } else if (!defenders.length &&
+        this.unitsAt(b.space, u => u.power === power && u.type === "superbomber").length) {
+        // a Super Bomber over an undefended enemy territory drops its carried man to seize it
+        const man = this._spawn("infantry", power, b.space); man.moved = 1; man.fromSuperBomber = true;
+        this.captureTerritory(b.space, power);
+        for (const f of this.unitsAt(b.space, u => u.type === "factory")) f.dead = true;
         b.resolved = true;
       }
     }

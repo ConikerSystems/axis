@@ -13,10 +13,11 @@ window.Board = (function () {
   const NEUTRAL_FILL = "#d8cfba";
   const SEA_FILL = "#8f9d97"; // aged sea-chart grey-teal
   const GLYPH = { infantry: "I", artillery: "A", tank: "T", aaa: "AA", factory: "IC",
-    fighter: "F", bomber: "B", submarine: "S", transport: "Tr", destroyer: "D",
+    fighter: "F", bomber: "B", superbomber: "SB", submarine: "S", transport: "Tr", destroyer: "D",
     cruiser: "C", carrier: "CV", battleship: "BB" };
   const NAME = { infantry: "Infantry", artillery: "Artillery", tank: "Tank", aaa: "Antiaircraft Gun",
-    factory: "Industrial Complex", fighter: "Fighter", bomber: "Bomber", submarine: "Submarine",
+    factory: "Industrial Complex", fighter: "Fighter", bomber: "Bomber", superbomber: "Super Bomber",
+    submarine: "Submarine",
     transport: "Transport", destroyer: "Destroyer", cruiser: "Cruiser", carrier: "Aircraft Carrier",
     battleship: "Battleship" };
   const POWER_LABEL = { soviet: "Soviet", germany: "German", uk: "British", japan: "Japanese", us: "US" };
