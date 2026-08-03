@@ -102,7 +102,8 @@ window.Board = (function () {
         if (pt[0] < minx) minx = pt[0]; if (pt[0] > maxx) maxx = pt[0];
         if (pt[1] < miny) miny = pt[1]; if (pt[1] > maxy) maxy = pt[1];
       }
-      spaceExtent[id] = Math.max(26, Math.min(maxx - minx, maxy - miny) / 2);
+      const seaZone = MAP.spaces[id] && MAP.spaces[id].sea;
+      spaceExtent[id] = Math.max(seaZone ? 40 : 26, Math.min(maxx - minx, maxy - miny) / 2);
     }
 
     // --- build static geometry ---
@@ -471,17 +472,21 @@ window.Board = (function () {
         const perRow = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(keys.length))));
         const rowsN = Math.ceil(keys.length / perRow);
         const cols = Math.min(perRow, keys.length);
-        // spread stacks out where the territory has room; stay >1 chip apart (52),
-        // and cap so the block fits within ~1.7× the space's radius.
+        // Fit the block inside the space so stacks never spill into a neighbour.
+        // Spacing spreads out where there's room but squeezes down (chips nearly
+        // touching) when a small/crowded zone needs it. Sea zones center the block
+        // on the zone; land zones sit just below the territory name label.
+        const sea = MAP.spaces[id] && MAP.spaces[id].sea;
         const R = spaceExtent[id] || 60;
-        const colSpace = Math.max(52, Math.min(72, cols > 1 ? (1.7 * R) / (cols - 1) : 72));
-        const rowSpace = Math.max(50, Math.min(64, rowsN > 1 ? (1.7 * R) / (rowsN - 1) : 64));
+        const colSpace = cols > 1 ? Math.max(34, Math.min(72, (1.9 * R) / (cols - 1))) : 0;
+        const rowSpace = rowsN > 1 ? Math.max(36, Math.min(64, (1.9 * R) / (rowsN - 1))) : 0;
         keys.forEach((k, i) => {
           const gr = groups[k];
           const row = Math.floor(i / perRow), col = i % perRow;
           const colsThisRow = Math.min(perRow, keys.length - row * perRow); // center each row
           const x = c[0] + (col - (colsThisRow - 1) / 2) * colSpace;
-          const y = c[1] + 30 + row * rowSpace;
+          const yBase = sea ? c[1] - ((rowsN - 1) / 2) * rowSpace : c[1] + 30;
+          const y = yBase + row * rowSpace;
           const isCur = game.players && game.current === gr.power;
           const label = `${POWER_LABEL[gr.power] || ""} ${NAME[gr.type]}${gr.n > 1 ? "  ×" + gr.n : ""}` +
             (gr.cargo ? `  ·  ${gr.cargo} aboard` : "");

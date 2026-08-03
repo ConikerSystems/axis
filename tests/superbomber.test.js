@@ -67,61 +67,39 @@ t("SBR: setSBR accepts a super bomber", () => {
   eq(sb.sbr, "germany");
 });
 
-t("strike HIT (≤4): wipes all defenders + the complex, man seizes the territory", () => {
+t("strike ALWAYS annihilates all defenders + the complex; man seizes the territory", () => {
   const g = mk({ options: { superBomber: true } });
   g.turnIndex = 4; g.phase = "combat";
   const sb = g._spawn("superbomber", "us", "germany");
-  force(g, 3); // AA (needs 1) misses; super-strike (≤4) hits
+  force(g, 6); // even the worst roll — the strike is guaranteed
   autoBattle(g, "germany");
-  const enemyLeft = g.unitsAt("germany", u => u.power === "germany");
-  eq(enemyLeft.length, 0, "all German units + complex destroyed");
+  eq(g.unitsAt("germany", u => u.power === "germany").length, 0, "all German units + complex destroyed");
   eq(g.unitsAt("germany", u => u.type === "factory").length, 0, "industrial complex destroyed");
   eq(g.owner["germany"], "us", "territory captured by the US");
-  ok(g.unitsAt("germany", u => u.type === "infantry" && u.power === "us").length === 1, "carried man on the ground");
+  eq(g.unitsAt("germany", u => u.type === "infantry" && u.power === "us").length, 1, "carried man on the ground");
   ok(!sb.dead, "super bomber survives to fly home");
 });
 
-t("strike MISS (>4): clean miss, defenders survive, bomber flies home", () => {
-  const g = mk({ options: { superBomber: true } });
-  g.turnIndex = 4; g.phase = "combat";
-  const sb = g._spawn("superbomber", "us", "germany");
-  force(g, 6); // everything misses
-  autoBattle(g, "germany");
-  ok(g.unitsAt("germany", u => u.power === "germany").length > 0, "German defenders survive");
-  eq(g.owner["germany"], "germany", "not captured");
-  ok(!sb.dead, "super bomber survived (flies home in noncombat)");
-  ok(g.unitsAt("germany", u => u.type === "infantry" && u.power === "us").length === 0, "no man dropped on a miss");
-});
-
-t("AA shoots it down (rolls 1): no strike, defenders hold", () => {
+t("immune to AA: survives and wins even when the AA gun rolls a 1", () => {
   const g = mk({ options: { superBomber: true } });
   g.turnIndex = 4; g.phase = "combat";
   const sb = g._spawn("superbomber", "us", "germany"); // germany has an AA gun
-  force(g, 1); // AA hits on a 1
+  force(g, 1); // AA rolls all 1s — no effect on the super bomber
   autoBattle(g, "germany");
-  ok(sb.dead, "super bomber shot down by AA before its strike");
-  eq(g.owner["germany"], "germany", "territory not captured");
+  ok(!sb.dead, "super bomber cannot be shot down by AA");
+  eq(g.owner["germany"], "us", "strike still wins and captures");
 });
 
-t("fighter escort soaks the AA hit instead of the bomber", () => {
+t("AA can still hit an escorting fighter (only the super bomber is immune)", () => {
   const g = mk({ options: { superBomber: true } });
   g.turnIndex = 4; g.phase = "combat";
   const sb = g._spawn("superbomber", "us", "germany");
   const ftr = g._spawn("fighter", "us", "germany");
-  // AA fires one hit (dice [1,6]); then the super-strike hits ([3]).
-  let call = 0;
-  g.roll = (n) => { call++; return call === 1 ? [1, 6].slice(0, n) : new Array(n).fill(3); };
-  const b = new Combat.Battle(g, "germany");
-  let d, guard = 0;
-  while ((d = b.pending()) && guard++ < 500) {
-    if (d.type === "casualties") {
-      const f = d.pool.find(id => g.unit(id).type === "fighter"); // choose the escort as casualty
-      b.decide({ units: f ? [f] : d.pool.slice(0, d.count) });
-    } else b.decide({ units: [] });
-  }
-  ok(ftr.dead, "fighter took the AA hit");
-  ok(!sb.dead, "super bomber survived to strike");
-  eq(g.owner["germany"], "us", "strike then captured");
+  force(g, 1); // AA fires at the (single, non-immune) fighter and hits
+  autoBattle(g, "germany");
+  ok(ftr.dead, "fighter is hit by AA");
+  ok(!sb.dead, "super bomber is immune");
+  eq(g.owner["germany"], "us", "strike wins and captures");
 });
 
 t("strike at SEA: wipes enemy ships, no man / no capture", () => {
