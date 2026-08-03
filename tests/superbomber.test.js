@@ -151,5 +151,19 @@ t("undefended enemy territory: super bomber drops its man to seize it", () => {
   ok(g.unitsAt("belorussia", u => u.type === "infantry" && u.power === "us").length === 1, "man on the ground");
 });
 
+t("fires again on its next attack (per-combat flag resets each turn)", () => {
+  const g = mk({ options: { superBomber: true } });
+  g.turnIndex = 4; g.phase = "combat";
+  const sb = g._spawn("superbomber", "us", "germany");
+  force(g, 3); autoBattle(g, "germany");
+  ok(sb.superFired, "fired in the first combat");
+  g.endCombat(); // end of the combat phase clears per-combat flags
+  ok(!sb.superFired, "superFired cleared — ready to strike again next turn");
+  // next turn: move it to a new target and confirm it strikes again
+  sb.space = "france"; sb.moved = 0; g.phase = "combat";
+  force(g, 3); autoBattle(g, "france");
+  eq(g.owner["france"], "us", "struck and captured a second time");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

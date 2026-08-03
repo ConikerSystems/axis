@@ -456,8 +456,16 @@
         if (u.amphibTarget) { contested.add(at); continue; }
         if (this.hasEnemyUnits(power, at) && (!s.sea || !this.unitsAt(at, x =>
           !this.isFriendly(power, x.power)).every(x => UNITS[x.type].facility))) {
-          // a sea zone holding only enemy subs/transports is attacked only by declaration
-          if (s.sea && !this.isHostileSpace(power, at) && !this.declaredSeaAttacks.has(at)) continue;
+          // A sea zone holding only enemy subs/transports is normally attacked only by
+          // declaration (you may bypass subs). EXCEPTION: a defenseless transport — no enemy
+          // sub or surface warship protecting it — is auto-attacked and destroyed whenever a
+          // unit that can hit it ends there. You don't opt in to sink a lone transport.
+          if (s.sea && !this.isHostileSpace(power, at) && !this.declaredSeaAttacks.has(at)) {
+            const enemies = this.unitsAt(at, x => !this.isFriendly(power, x.power) && !UNITS[x.type].facility);
+            const onlyTransports = enemies.length > 0 && enemies.every(x => UNITS[x.type].transport);
+            const canAttack = this.unitsAt(at, x => x.power === power && UNITS[x.type].attack > 0).length > 0;
+            if (!(onlyTransports && canAttack)) continue;
+          }
           contested.add(at);
         } else if (!s.sea && this.isHostileSpace(power, at) && !UNITS[u.type].air) {
           contested.add(at); // empty hostile territory (capture)

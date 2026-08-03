@@ -527,7 +527,10 @@
 
   Game.prototype.endCombat = function () {
     if (this.pendingBattles().length) throw new Error("battles remain");
-    for (const u of this.units) { delete u.firedSurprise; delete u.bombarded; delete u.amphibTarget; }
+    // clear per-combat flags so each unit is fresh next turn — incl. the Super Bomber's
+    // one-shot marker, so every super bomber fires again on its next attack.
+    for (const u of this.units) { delete u.firedSurprise; delete u.bombarded; delete u.amphibTarget;
+      delete u.superFired; delete u.superMissed; }
     this.units = this.units.filter(u => !u.dead);
     this.phase = "noncombatMove";
   };
