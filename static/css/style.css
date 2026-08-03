@@ -211,7 +211,9 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
 #side-panel { position: absolute; top: 0; right: 0; bottom: 0; width: 340px; max-width: 88vw;
   background: rgba(26, 28, 33, .96); border-left: 2px solid #000; transform: translateX(105%);
   transition: transform .22s; z-index: 20; overflow-y: auto;
-  padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  /* reserve the floating HOLD button's footprint so panel rows (e.g. the
+     battleship stepper during purchase) never sit hidden underneath it */
+  padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)); }
 #side-panel.open { transform: none; }
 /* collapse tab: lets the player tuck the phase panel away to see the whole map.
    Position + collapsed state are driven inline from ui.js. */
