@@ -637,5 +637,20 @@ t("mobilize: fighter needs a carrier at sea; bomber can't go to sea", () => {
   eq(g.unitsAt(sz, u => u.type === "fighter" && u.onCarrier).length, 1, "fighter placed on the carrier");
 });
 
+t("combat move: aircraft only target hostile spaces, and must be able to land back", () => {
+  const g = mk({ seed: 5 }); g.turnIndex = 1; g.phase = "combatMove"; // germany
+  const ftr = g._spawn("fighter", "germany", "germany");
+  const r = g.reachable(ftr, "combatMove");
+  // a friendly German-held neighbour must NOT be an attack target
+  const friendlyNb = g.space("germany").conn.find(id => {
+    const o = g.owner[id]; return o && g.isFriendly("germany", o) && !g.isHostileSpace("germany", id) && !g.hasEnemyUnits("germany", id);
+  });
+  if (friendlyNb) ok(r.get(friendlyNb) && r.get(friendlyNb).endOk === false, "friendly space is not an attack target");
+  // at least one reachable hostile space is a valid target (endOk true) and it is hostile
+  const targets = [...r].filter(([, v]) => v.endOk);
+  ok(targets.length > 0, "has at least one landable hostile target");
+  ok(targets.every(([id]) => g.isHostileSpace("germany", id) || g.hasEnemyUnits("germany", id)), "every air target is hostile");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
