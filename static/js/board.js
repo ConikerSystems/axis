@@ -304,8 +304,10 @@ window.Board = (function () {
       const ctr = document.createElement("div");
       ctr.className = "board-ctrls";
       ctr.innerHTML =
-        '<button class="bc-btn" data-act="zin" aria-label="Zoom in">+</button>' +
-        '<button class="bc-btn" data-act="zout" aria-label="Zoom out">−</button>' +
+        '<div class="bc-zoom">' +
+          '<button class="bc-btn zoom" data-act="zin" aria-label="Zoom in">🔍<span>+</span></button>' +
+          '<button class="bc-btn zoom" data-act="zout" aria-label="Zoom out">🔍<span>−</span></button>' +
+        '</div>' +
         '<div class="bc-pad">' +
           '<button class="bc-btn up" data-act="up" aria-label="Pan up">▲</button>' +
           '<button class="bc-btn left" data-act="left" aria-label="Pan left">◀</button>' +
