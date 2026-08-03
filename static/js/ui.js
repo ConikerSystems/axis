@@ -59,17 +59,33 @@ window.UI = (function () {
   // recognizable silhouette as the map chips, but rendered in brass with a dark
   // relief layer under a gold gradient and a soft top highlight — the look of the
   // physical Axis & Allies plastic pieces cast in gold.
-  function goldPiece(type) {
+  // lighten (f>1, toward white) or darken (f<1) a #rrggbb hex
+  function shade(hex, f) {
+    const n = parseInt(hex.slice(1), 16);
+    let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    if (f >= 1) { const t = f - 1; r += (255 - r) * t; g += (255 - g) * t; b += (255 - b) * t; }
+    else { r *= f; g *= f; b *= f; }
+    const h = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0");
+    return "#" + h(r) + h(g) + h(b);
+  }
+  // A sculpted miniature. With a power, it's tinted to that player's colour
+  // (US green, Soviet red, …) so purchase/mobilize pieces match the owner.
+  function goldPiece(type, power) {
     const markup = (window.UNIT_ICONS && UNIT_ICONS[type]) || "";
-    const gid = "gp-" + type;
+    const base = power && Board.POWER_COLOR && Board.POWER_COLOR[power];
+    const gid = "gp-" + type + (power || "");
+    const stops = base
+      ? `<stop offset="0" stop-color="${shade(base, 1.55)}"/><stop offset=".4" stop-color="${shade(base, 1.12)}"/>
+         <stop offset=".75" stop-color="${shade(base, .82)}"/><stop offset="1" stop-color="${shade(base, .55)}"/>`
+      : `<stop offset="0" stop-color="#fbe7ad"/><stop offset=".4" stop-color="#e0ad3d"/>
+         <stop offset=".75" stop-color="#a9781f"/><stop offset="1" stop-color="#7a5312"/>`;
+    const dark = base ? shade(base, .35) : "#4d3409";
+    const hi = base ? shade(base, 1.85) : "#fff7db";
     return `<svg class="gold-piece" viewBox="-14 -15 28 30" aria-hidden="true">
-      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0.25" y2="1">
-        <stop offset="0" stop-color="#fbe7ad"/><stop offset=".4" stop-color="#e0ad3d"/>
-        <stop offset=".75" stop-color="#a9781f"/><stop offset="1" stop-color="#7a5312"/>
-      </linearGradient></defs>
-      <g fill="#4d3409" color="#4d3409" opacity=".5" transform="translate(.8,1)">${markup}</g>
+      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0.25" y2="1">${stops}</linearGradient></defs>
+      <g fill="${dark}" color="${dark}" opacity=".5" transform="translate(.8,1)">${markup}</g>
       <g fill="url(#${gid})" color="url(#${gid})">${markup}</g>
-      <g fill="#fff7db" color="#fff7db" opacity=".22" transform="translate(-.5,-.6)">${markup}</g>
+      <g fill="${hi}" color="${hi}" opacity=".22" transform="translate(-.5,-.6)">${markup}</g>
     </svg>`;
   }
   // one-line role blurb shown when the "?" on a purchase row is tapped
@@ -324,6 +340,23 @@ window.UI = (function () {
     if (!sticky) setTimeout(() => b.classList.remove("show"), 2600);
   }
 
+  // Brief centered notice announcing a new phase (fires once per phase entry).
+  let lastPhaseKey = null;
+  function showPhaseToast() {
+    if (!game) return;
+    const key = game.current + ":" + game.phase + ":" + game.round;
+    if (key === lastPhaseKey) return;      // don't repeat within the same phase
+    lastPhaseKey = key;
+    let t = $("#phase-toast");
+    if (!t) { t = div("phase-toast"); t.id = "phase-toast"; $("#screen-game").appendChild(t); }
+    t.innerHTML = `<span class="pt-emblem ${SIDES[game.current]}">${EMBLEM[game.current]}</span>` +
+      `<span class="pt-power">${POWER_NAMES[game.current].toUpperCase()}</span>` +
+      `<span class="pt-phase">${(PHASE_LABEL[game.phase] || game.phase).toUpperCase()}</span>`;
+    t.classList.remove("show"); void t.offsetWidth; t.classList.add("show");
+    clearTimeout(showPhaseToast._t);
+    showPhaseToast._t = setTimeout(() => t.classList.remove("show"), 1500);
+  }
+
   function autosave() {
     try {
       localStorage.setItem(saveKey, JSON.stringify({
@@ -380,6 +413,7 @@ window.UI = (function () {
     const pl = game.players[game.current];
     if (online && pl.type === "human" && pl.seat !== online.mySeat) return pushAndWait();
     if (pl.type === "ai") return runAITurn();
+    showPhaseToast(); // announce the new phase to the player
 
     // live spectating: publish this phase's state so the waiting player watches (Option A)
     if (online && iControl(game.current)) pushSpectate();
@@ -732,7 +766,7 @@ window.UI = (function () {
         const row = div("unit-row pu-row");
         row.innerHTML = `
           <div class="pu-name">${UNIT_NAME[ut].toUpperCase()}</div>
-          <div class="pu-pic">${goldPiece(ut)}<span class="pu-q" title="What is this unit?">?</span></div>
+          <div class="pu-pic">${goldPiece(ut, game.current)}<span class="pu-q" title="What is this unit?">?</span></div>
           <div class="pu-stat">${u.attack || "–"}</div>
           <div class="pu-stat">${u.defense || "–"}</div>
           <div class="pu-stat">${u.move || "–"}</div>
@@ -824,7 +858,7 @@ window.UI = (function () {
         if (p.qty <= 0) continue;
         any = true;
         const row = div("unit-row selectable mob-row" + (selected === p.unit ? " on" : ""));
-        row.innerHTML = `<div class="mob-pic">${goldPiece(p.unit)}</div>
+        row.innerHTML = `<div class="mob-pic">${goldPiece(p.unit, game.current)}</div>
           <div class="mob-info"><div class="unit-label">${UNIT_NAME[p.unit].toUpperCase()}</div>
             <div class="mob-left"><b>${p.qty}</b> to place</div></div>`;
         row.onclick = () => { selected = p.unit; mobilizeHighlight(p.unit); render(); };
