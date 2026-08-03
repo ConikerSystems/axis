@@ -84,6 +84,19 @@ t("SBR: setSBR accepts a super bomber", () => {
   eq(sb.sbr, "germany");
 });
 
+t("super bomber can run a strategic bombing raid (immune to AA, damages the IC, no capture)", () => {
+  const g = mk({ options: { superBomber: true } });
+  g.turnIndex = 4; g.phase = "combat";
+  const sb = g._spawn("superbomber", "us", "germany"); // germany has an IC + an AA gun
+  g.setSBR(sb.id);
+  g.battles = [{ space: "germany", sbr: true, resolved: false }];
+  force(g, 1); // AA rolls 1s (a hit for a normal bomber) — the super bomber is immune
+  const before = g.icDamage["germany"] || 0;
+  autoBattle(g, "germany", { sbr: true });
+  ok(!sb.dead, "super bomber cannot be shot down during a raid");
+  ok((g.icDamage["germany"] || 0) > before, "the raid applied bombing damage to the complex");
+  eq(g.owner["germany"], "germany", "a bombing raid does not capture the territory");
+});
 t("strike ALWAYS annihilates all defenders + the complex; man seizes the territory", () => {
   const g = mk({ options: { superBomber: true } });
   g.turnIndex = 4; g.phase = "combat";
