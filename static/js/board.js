@@ -281,6 +281,46 @@ window.Board = (function () {
       view.y = py - (py - view.y) * (view.k / k0);
       clampView(); applyView();
     }, { passive: false });
+    // stop iOS Safari's native pinch/gesture from fighting the app's pinch handler
+    ["gesturestart", "gesturechange", "gestureend"].forEach(g =>
+      svg.addEventListener(g, (e) => e.preventDefault()));
+
+    // --- on-screen zoom + pan controls (touch-friendly; complements pinch) ---
+    function zoomCenter(factor) {
+      const k0 = view.k;
+      view.k = Math.min(8, Math.max(0.9, view.k * factor));
+      const cx = W / 2, cy = H / 2; // keep the screen center fixed while zooming
+      view.x = cx - (cx - view.x) * (view.k / k0);
+      view.y = cy - (cy - view.y) * (view.k / k0);
+      clampView(); applyView();
+    }
+    function panStep(dirX, dirY) {
+      const step = 0.6 * W; // ~60% of a screen per press → ~2 presses cross the map
+      view.x -= dirX * step; view.y -= dirY * step;
+      clampView(); applyView();
+    }
+    const host = svg.parentNode;
+    if (host && !host.querySelector(".board-ctrls")) {
+      const ctr = document.createElement("div");
+      ctr.className = "board-ctrls";
+      ctr.innerHTML =
+        '<button class="bc-btn" data-act="zin" aria-label="Zoom in">+</button>' +
+        '<button class="bc-btn" data-act="zout" aria-label="Zoom out">−</button>' +
+        '<div class="bc-pad">' +
+          '<button class="bc-btn up" data-act="up" aria-label="Pan up">▲</button>' +
+          '<button class="bc-btn left" data-act="left" aria-label="Pan left">◀</button>' +
+          '<button class="bc-btn right" data-act="right" aria-label="Pan right">▶</button>' +
+          '<button class="bc-btn down" data-act="down" aria-label="Pan down">▼</button>' +
+        '</div>';
+      host.appendChild(ctr);
+      const acts = { zin: () => zoomCenter(1.5), zout: () => zoomCenter(1 / 1.5),
+        up: () => panStep(0, -1), down: () => panStep(0, 1), left: () => panStep(-1, 0), right: () => panStep(1, 0) };
+      ctr.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-act]"); if (!b) return;
+        e.preventDefault(); e.stopPropagation();
+        const fn = acts[b.dataset.act]; if (fn) fn();
+      });
+    }
 
     function spaceAt(e) {
       // hit-test under pointer, ignoring unit/drag layers
