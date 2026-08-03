@@ -208,7 +208,7 @@ window.Board = (function () {
       // drag a unit stack?
       const stack = e.target.closest && e.target.closest(".stack.draggable");
       if (stack && cb.onDragStart) {
-        const info = cb.onDragStart(stack.dataset.space, stack.dataset.power);
+        const info = cb.onDragStart(stack.dataset.space, stack.dataset.power, stack.dataset.type);
         if (info && info.targets && info.targets.length) {
           drag = { from: stack.dataset.space, power: stack.dataset.power,
             type: stack.dataset.type, targets: new Set(info.targets) };
@@ -272,7 +272,7 @@ window.Board = (function () {
         gDrag.innerHTML = ""; clearHighlight();
         if (!moved && e.type === "pointerup" && cb.onStackTap) {
           cb.onStackTap(d.from, d.power, d.type); // a tap on a piece opens the unit picker
-        } else if (!d.tapOnly && t && d.targets.has(t) && cb.onDrop) cb.onDrop(d.from, t, d.power);
+        } else if (!d.tapOnly && t && d.targets.has(t) && cb.onDrop) cb.onDrop(d.from, t, d.power, d.type);
       } else if (!moved && e.type === "pointerup") {
         const t = spaceAt(e);
         if (t && cb.onSpaceTap) cb.onSpaceTap(t, e);
