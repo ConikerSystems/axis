@@ -36,10 +36,27 @@ function autoBattle(g, spaceId, opts) {
 
 console.log("— super bomber —");
 
-t("unit stats: cost 15, move 8, still a bomber otherwise", () => {
-  eq(UNITS.superbomber.cost, 15); eq(UNITS.superbomber.move, 8);
+t("unit stats: cost 15, move 12, still a bomber otherwise", () => {
+  eq(UNITS.superbomber.cost, 15); eq(UNITS.superbomber.move, 12);
   eq(UNITS.superbomber.attack, 4); eq(UNITS.superbomber.defense, 1);
   ok(UNITS.superbomber.air && UNITS.superbomber.superBomber);
+});
+
+t("every US bomber becomes a super bomber at the US turn (uniform power)", () => {
+  const g = mk({ options: { superBomber: true } });
+  g._spawn("bomber", "us", "eastern_united_states");
+  g._spawn("bomber", "us", "western_united_states");
+  // simulate arriving at the US turn: the turn-start hook auto-upgrades
+  g.turnIndex = 4; g._snapshotTurnStart();
+  eq(g.units.filter(u => u.power === "us" && u.type === "bomber" && !u.dead).length, 0, "no plain US bombers remain");
+  ok(g.units.filter(u => u.power === "us" && u.type === "superbomber" && !u.dead).length >= 2, "all US bombers are super bombers");
+});
+
+t("option off: US bombers stay ordinary bombers", () => {
+  const g = mk(); // super bomber option off
+  g._spawn("bomber", "us", "eastern_united_states");
+  g.turnIndex = 4; g._snapshotTurnStart();
+  ok(g.units.some(u => u.power === "us" && u.type === "bomber" && !u.dead), "bomber not upgraded when option off");
 });
 
 t("upgrade: US bomber → super bomber for +3 IPC", () => {

@@ -97,7 +97,7 @@ window.UI = (function () {
     factory: "Builds new units each turn, up to the territory's income value.",
     fighter: "Versatile aircraft (def 4); escorts, intercepts, lands after combat.",
     bomber: "Long range, hits hard (atk 4), and can run strategic bombing raids.",
-    superbomber: "USA super weapon: flies 8, carries a man, and is IMMUNE to AA. Its strike ALWAYS wipes out every enemy force at the target — land or sea — then the man seizes the territory. The industrial complex is left standing and captured, not destroyed. (It must still land somewhere friendly.)",
+    superbomber: "USA super weapon: flies 12, carries a man, and is IMMUNE to AA. Its strike ALWAYS wins — it wipes out every enemy force at the target (land or sea), then the man seizes the territory. The industrial complex is left standing and captured, not destroyed. Every US bomber is a super bomber. (It must still land somewhere friendly.)",
     submarine: "Surprise first strike; can submerge to slip away from battle.",
     transport: "Ferries land units across the sea; has no attack of its own.",
     destroyer: "Anti-submarine screen — cancels enemy sub surprise strikes.",
@@ -942,7 +942,10 @@ window.UI = (function () {
       buttons.unshift({ label: "➤ MOVE UNITS", cls: "primary", value: "movePick" });
     // special orders in combat move
     if (game.phase === "combatMove" && game.players[game.current].type === "human") {
-      const myBombers = game.unitsAt(id, u => u.power === game.current && (u.type === "bomber" || u.type === "superbomber") && !u.sbr);
+      // Only PLAIN bombers do strategic bombing raids. A Super Bomber never bombs an IC
+      // for damage — it always makes its annihilating strike (wipes every enemy piece and
+      // captures the territory, leaving the complex standing), so it attacks normally.
+      const myBombers = game.unitsAt(id, u => u.power === game.current && u.type === "bomber" && !u.sbr);
       const enemyIC = !s.sea && game.isHostileSpace(game.current, id) && game.unitsAt(id, u => u.type === "factory").length;
       if (myBombers.length && enemyIC)
         buttons.unshift({ label: "🛩 DECLARE BOMBING RAID", cls: "primary", value: "sbr" });
@@ -952,7 +955,7 @@ window.UI = (function () {
     }
     openModal(s.name.toUpperCase(), body, buttons).then((v) => {
       if (v === "sbr") {
-        const b = game.unitsAt(id, u => u.power === game.current && (u.type === "bomber" || u.type === "superbomber") && !u.sbr)[0];
+        const b = game.unitsAt(id, u => u.power === game.current && u.type === "bomber" && !u.sbr)[0];
         if (b) { try { game.setSBR(b.id); banner("Strategic bombing raid declared on " + s.name); } catch (e) { banner(e.message); } }
       }
       if (v === "seaAtk") { game.toggleSeaAttack(id); banner(game.declaredSeaAttacks.has(id) ? "Attack declared" : "Attack cancelled"); }
@@ -1871,11 +1874,11 @@ window.UI = (function () {
         <h3 class="admin-h">🧪 Experimental features</h3>
         <label class="setting" style="text-align:left">
           <input type="checkbox" id="admin-superbomber"> <b>🛩 USA Super Bomber</b> — when ON, the
-          <b>USA Super Bomber</b> option appears in game setup (hotseat &amp; online). Flies 8, carries a
-          man, and is <b>immune to AA</b>; its strike <b>always</b> wipes out every enemy piece at the
-          target — land or sea — then the man seizes the territory. The <b>industrial complex is left
-          standing</b> and captured, not destroyed. Replaces the US
-          bomber (cost 15); existing US bombers upgrade for +3.
+          <b>USA Super Bomber</b> option appears in game setup (hotseat &amp; online). Flies 12, carries a
+          man, and is <b>immune to AA</b>; its strike <b>always wins</b> — it wipes out every enemy piece at the
+          target (land or sea), then the man seizes the territory. The <b>industrial complex is left
+          standing</b> and captured, not destroyed. <b>Every US bomber is a super bomber</b> (uniform power,
+          upgraded automatically at the US turn) and never runs an ordinary bombing raid.
         </label>
       </div>
       <div class="admin-sec">
