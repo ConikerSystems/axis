@@ -19,6 +19,9 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
   transition: filter .1s; display: inline-block; text-decoration: none; }
 .btn:active { filter: brightness(1.3); }
 .btn.primary { border-color: var(--gold); color: var(--gold); }
+/* a "locked" (disabled-looking) button — still tappable, but shows it's off; a tap explains why */
+.btn.locked { opacity: .45; border-color: var(--line); color: var(--dim); }
+.btn.locked::after { content: " 🔒"; }
 .btn.danger { background: var(--red); border-color: #e05545; color: #fff; }
 .btn.big { display: block; font-size: 1.15rem; padding: 14px 22px; margin: 8px 0; }
 .btn.close { background: var(--red); color: #fff; padding: 8px 14px; }
