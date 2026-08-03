@@ -66,8 +66,8 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
   border: 1px solid var(--gold-dim); color: var(--gold); font: inherit; font-weight: 700;
   padding: 8px 6px; border-radius: 4px; text-align: center; letter-spacing: .05em; }
 .settings { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 22px; }
-.setting { background: var(--panel); border: 1px solid var(--line); padding: 12px; border-radius: 6px;
-  color: var(--dim); text-transform: none; letter-spacing: 0; cursor: pointer; }
+.setting { display: block; background: var(--panel); border: 1px solid var(--line); padding: 12px; border-radius: 6px;
+  color: var(--dim); text-transform: none; letter-spacing: 0; cursor: pointer; line-height: 1.5; }
 .setting b { color: var(--text); letter-spacing: .05em; }
 .setting input { transform: scale(1.4); margin-right: 10px; accent-color: var(--gold); }
 #new-start { margin-left: auto; max-width: 300px; }
