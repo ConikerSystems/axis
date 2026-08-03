@@ -212,7 +212,8 @@
       switch (item.step) {
         case "aaFire": {
           const aas = this.defAlive.filter(u => u.type === "aaa");
-          const airs = this.attAlive.filter(isAir);
+          // Super Bombers are immune to antiaircraft fire — AA can only target other air.
+          const airs = this.attAlive.filter(u => isAir(u) && u.type !== "superbomber");
           const shots = Math.min(aas.length * 3, airs.length);
           if (!shots) break;
           const dice = g.roll(shots, "AA fire");
@@ -223,29 +224,22 @@
           break;
         }
         case "superStrike": {
-          // Each surviving attacking Super Bomber gets ONE roll. Any die ≤4 annihilates
-          // every enemy unit here AND the industrial complex; on land, the carried man
-          // drops in to seize the territory. A clean miss sends the bombers home.
+          // The Super Bomber is unstoppable: no AA can touch it (handled in aaFire) and its
+          // strike ALWAYS lands — it annihilates every enemy unit here AND the industrial
+          // complex (land or sea); on land the carried man drops in to seize the territory.
           const sbs = this.attAlive.filter(u => u.type === "superbomber" && !u.superFired);
           if (!sbs.length) break;
-          const dice = g.roll(sbs.length, "Super Bomber strike");
           sbs.forEach(b => b.superFired = true);
-          const hit = dice.some(d => d <= 4);
-          this._ev("dice", { side: "attacker", label: "Super Bomber strike", dice, hits: hit ? 1 : 0 });
-          if (hit) {
-            for (const u of this.def) if (!u.dead) this._reallyKill(u);       // all defenders
-            for (const f of g.unitsAt(this.space, u => UNITS[u.type].facility &&
-              !g.isFriendly(this.attacker, u.power))) f.dead = true;          // and the complex
-            this._ev("info", { text: "Super Bomber annihilates all forces at " + this.s.name });
-            if (!this.sea) {
-              const man = g._spawn("infantry", this.attacker, this.space);    // the carried man
-              man.moved = 1; man.fromSuperBomber = true;
-              this.att.push(man);
-              this._ev("info", { text: "Carried infantry secures " + this.s.name });
-            }
-          } else {
-            this._ev("info", { text: "Super Bomber strike missed — flying home" });
-            for (const b of sbs) { b.superMissed = true; const i = this.att.indexOf(b); if (i >= 0) this.att.splice(i, 1); }
+          this._ev("dice", { side: "attacker", label: "Super Bomber strike", dice: sbs.map(() => 6), hits: 1 });
+          for (const u of this.def) if (!u.dead) this._reallyKill(u);         // all defenders
+          for (const f of g.unitsAt(this.space, u => UNITS[u.type].facility &&
+            !g.isFriendly(this.attacker, u.power))) f.dead = true;            // and the complex
+          this._ev("info", { text: "Super Bomber annihilates all forces at " + this.s.name });
+          if (!this.sea) {
+            const man = g._spawn("infantry", this.attacker, this.space);      // the carried man
+            man.moved = 1; man.fromSuperBomber = true;
+            this.att.push(man);
+            this._ev("info", { text: "Carried infantry secures " + this.s.name });
           }
           break;
         }
@@ -369,17 +363,18 @@
           break;
         }
         case "icAA": {
-          const bombers = this.alive(this.bombers);
-          if (!bombers.length) break;
+          // Super Bombers are immune to AA even on a bombing raid.
+          const hittable = () => this.alive(this.bombers).filter(b => b.type !== "superbomber");
+          if (!hittable().length) break;
           // 1942.2: bombers are fired on during a raid only if an antiaircraft gun is
           // present in the target territory (an IC has no inherent air defense).
           const aaGuns = g.unitsAt(this.space, u => u.type === "aaa" && !g.isFriendly(this.attacker, u.power));
           if (!aaGuns.length) break;
-          const shots = Math.min(aaGuns.length * 3, bombers.length); // 1 die/bomber, max 3 per gun
+          const shots = Math.min(aaGuns.length * 3, hittable().length); // 1 die/bomber, max 3 per gun
           const dice = g.roll(shots, "AA fire (bombing raid)");
           const hits = dice.filter(d => d === 1).length;
           this._ev("dice", { side: "defender", label: "Antiaircraft fire", dice, hits });
-          for (let i = 0; i < hits; i++) { const b = this.alive(this.bombers)[0]; if (b) this._reallyKill(b); }
+          for (let i = 0; i < hits; i++) { const b = hittable()[0]; if (b) this._reallyKill(b); }
           break;
         }
         case "sbrDamage": {
