@@ -1,7 +1,7 @@
 /* Axis 1942 service worker — NETWORK-FIRST with cached offline fallback.
    Fully self-contained app (no external assets) so it plays offline.
    Bump VERSION together with static/js/version.js on every deploy. */
-const VERSION = "axis-v49";
+const VERSION = "axis-v50";
 const SHELL = [
   "./",
   "index.html",

@@ -994,10 +994,13 @@ window.UI = (function () {
       if (s.sea && game.hasEnemyUnits(game.current, id) && !game.isHostileSpace(game.current, id) &&
         game.unitsAt(id, u => u.power === game.current).length)
         buttons.unshift({ label: game.declaredSeaAttacks.has(id) ? "CANCEL ATTACK ON SUBS/TRANSPORTS" : "⚔ ATTACK SUBS/TRANSPORTS HERE", cls: "primary", value: "seaAtk" });
-      // cancel just THIS territory's attack (send its attackers back), leaving other attacks intact
-      if (game.hasPendingAttack(id))
-        buttons.unshift({ label: "✖ CANCEL THIS ATTACK", cls: "danger", value: "cancelAttack" });
     }
+    // Cancel just THIS space's incoming moves — works in combat AND noncombat, for all unit
+    // types — sending those pieces back where they came from, leaving every other move intact.
+    if ((game.phase === "combatMove" || game.phase === "noncombatMove") &&
+      game.players[game.current].type === "human" && game.hasPendingMove(id))
+      buttons.unshift({ label: game.phase === "combatMove" ? "✖ CANCEL THIS ATTACK" : "✖ CANCEL THIS MOVE",
+        cls: "danger", value: "cancelMove" });
     openModal(s.name.toUpperCase(), body, buttons).then((v) => {
       if (v === "sbr") {
         let n = 0;
@@ -1011,11 +1014,13 @@ window.UI = (function () {
         banner("Bomber will attack " + s.name + " (raid cancelled).");
       }
       if (v === "seaAtk") { game.toggleSeaAttack(id); banner(game.declaredSeaAttacks.has(id) ? "Attack declared" : "Attack cancelled"); }
-      if (v === "cancelAttack") {
+      if (v === "cancelMove") {
         undoStack.push(game.snapshot());
-        try { game.cancelAttack(id); board.render(); topBar();
-          banner("Attack on " + s.name + " cancelled — pieces sent back."); }
-        catch (e) { undoStack.pop(); banner(e.message); }
+        try {
+          game.cancelMovesTo(id); board.render(); topBar();
+          banner((game.phase === "combatMove" ? "Attack on " : "Move to ") + s.name + " cancelled — pieces sent back.");
+          refreshNoncombatAir();
+        } catch (e) { undoStack.pop(); banner(e.message); }
       }
       if (v === "movePick") openMovePicker(id, game.current, null);
     });

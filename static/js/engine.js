@@ -456,21 +456,23 @@
       if (this.declaredSeaAttacks.has(spaceId)) this.declaredSeaAttacks.delete(spaceId);
       else this.declaredSeaAttacks.add(spaceId);
     }
-    // Is the current power set to attack this space this combat-move phase? (units moved
-    // in, an amphibious assault declared, or an optional sub/transport attack declared.)
-    hasPendingAttack(spaceId) {
-      if (this.phase !== "combatMove") return false;
+    // Did the current power move units into this space this move phase (combat OR noncombat),
+    // or declare an amphibious / sub-transport attack on it? Used to offer a per-space cancel.
+    hasPendingMove(spaceId) {
+      if (this.phase !== "combatMove" && this.phase !== "noncombatMove") return false;
       const power = this.current;
-      if (this.assaults[spaceId]) return true;
-      if (this.declaredSeaAttacks.has(spaceId)) return true;
+      if (this.phase === "combatMove") {
+        if (this.assaults[spaceId]) return true;
+        if (this.declaredSeaAttacks.has(spaceId)) return true;
+      }
       return this.unitsAt(spaceId, u => u.power === power &&
         !u.onTransport && !u.onCarrier && u.moved > 0).length > 0;
     }
-    // Cancel just this one space's attack: send every attacker that moved in back to where
-    // it started (with its riders), drop any raid/amphibious/sea declaration on it, and free
-    // the pieces to do something else — without touching any other declared attack.
-    cancelAttack(spaceId) {
-      if (this.phase !== "combatMove") throw new Error("wrong phase");
+    // Cancel just this one space's incoming moves — combat or noncombat — sending every unit
+    // that moved in (any type) back to where it started, with its riders, and dropping any
+    // raid/amphibious/sea declaration on it. Every other move/attack is left untouched.
+    cancelMovesTo(spaceId) {
+      if (this.phase !== "combatMove" && this.phase !== "noncombatMove") throw new Error("wrong phase");
       const power = this.current;
       const backedIds = new Set();
       let changed = false;
@@ -496,8 +498,8 @@
       }
       if (this.declaredSeaAttacks.has(spaceId)) { this.declaredSeaAttacks.delete(spaceId); changed = true; }
       if (backedIds.size) this.moves = this.moves.filter(m => !backedIds.has(m.unitId));
-      if (!changed) throw new Error("no attack to cancel here");
-      this._log(`Attack on ${this.space(spaceId).name} cancelled`);
+      if (!changed) throw new Error("nothing to cancel here");
+      this._log(`Moves to ${this.space(spaceId).name} cancelled`);
     }
     endCombatMove() {
       // blitz sweep: tanks capture empty hostile territories they passed through
