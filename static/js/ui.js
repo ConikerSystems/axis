@@ -579,6 +579,7 @@ window.UI = (function () {
       { label: "GAME LOG", cls: "", value: "log" },
     ];
     if (online) menuBtns.push({ label: "🗑 CANCEL GAME (DELETE FOR BOTH)", cls: "", value: "cancelGame" });
+    else menuBtns.push({ label: "🗑 DELETE GAME", cls: "", value: "deleteLocal" });
     const choice = await openModal("MENU", div("", `<p class="modal-note">${game ? game.title : ""}${online ? " · 🌐 " + online.id : ""}</p>`), menuBtns);
     if (choice === "exit") {
       autosave();
@@ -590,6 +591,15 @@ window.UI = (function () {
       const body = div("log-view", game.log.slice(-120).map(l =>
         `<div><b>R${l.round}</b> ${POWER_NAMES[l.power] || ""} <i>${PHASE_LABEL[l.phase] || ""}</i> — ${l.msg}</div>`).join(""));
       openModal("GAME LOG", body, [{ label: "CLOSE", cls: "primary" }]);
+    }
+    if (choice === "deleteLocal") {
+      const sure = await confirmModal("DELETE GAME?",
+        `Permanently delete "<b>${game.title}</b>"? This cannot be undone.`);
+      if (!sure) return;
+      localStorage.removeItem(saveKey);
+      game = null; online = null;
+      banner("Game deleted.");
+      show("#screen-home"); refreshHome();
     }
     if (choice === "cancelGame") {
       const sure = await confirmModal("CANCEL " + online.id + "?",
@@ -1862,6 +1872,7 @@ window.UI = (function () {
   function refreshHome() {
     const has = !!localStorage.getItem(saveKey);
     $("#btn-continue").style.display = has ? "" : "none";
+    const del = $("#btn-delete-save"); if (del) del.style.display = has ? "" : "none";
     if (has) {
       try {
         const d = JSON.parse(localStorage.getItem(saveKey));
@@ -1887,6 +1898,17 @@ window.UI = (function () {
       initNewGameScreen(); show("#screen-new");
     };
     $("#btn-continue").onclick = () => loadAutosave();
+    $("#btn-delete-save").onclick = async () => {
+      let d = null; try { d = JSON.parse(localStorage.getItem(saveKey) || "null"); } catch (e) {}
+      const isOnline = d && d.online;
+      const sure = await confirmModal("DELETE SAVED GAME?",
+        (d ? `Delete "<b>${d.title || "your game"}</b>" from this device? ` : "Delete the saved game? ") +
+        (isOnline ? "This removes it from this device only — the online game still lives on GitHub (use 🌐 MY ONLINE GAMES to delete it for both players)."
+                  : "This cannot be undone."));
+      if (!sure) return;
+      localStorage.removeItem(saveKey);
+      banner("Saved game deleted."); refreshHome();
+    };
     $("#btn-online-new").onclick = openOnlineCreate;
     $("#btn-online-join").onclick = openOnlineGames;
     $("#btn-admin").onclick = openAdminPanel;

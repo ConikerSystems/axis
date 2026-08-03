@@ -1,6 +1,14 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-03 (v1.10.0)_
+_Updated: 2026-08-03 (v1.10.1)_
+
+## v1.10.1 (2026-08-03) — modal scroll fix + delete local games
+- **Modal scroll fix** (`style.css`): `.modal-body` now `flex:1 1 auto; min-height:0` so tall
+  modals (e.g. Admin) scroll instead of clipping — the Admin Super Bomber toggle was
+  unreachable on short screens.
+- **Delete local games**: in-game **⚙ Menu → 🗑 DELETE GAME** (non-online) and a home-screen
+  **🗑 DELETE SAVED GAME** button (shown when an autosave exists) clear the local save.
+  Online games unchanged (🌐 MY ONLINE GAMES → DELETE, or in-game CANCEL GAME for both).
 
 ## v1.10.0 (2026-08-03) — USA Super Bomber (Admin experimental)
 Opt-in super unit, **off by default**, fully backward-compatible (all existing tests +
