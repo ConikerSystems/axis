@@ -12,6 +12,22 @@
   "use strict";
   const { UNITS } = Engine;
 
+  // ---------- difficulty ----------
+  // Three tiers tune how aggressively and efficiently the AI plays. "normal" is the
+  // original behaviour, so existing games are unchanged. "hard" also gets a small income
+  // bonus (applied in the engine) so it can field a genuinely tougher force.
+  const LEVELS = {
+    easy:   { winThresh: 0.80, forceMul: 3.6, advance: false, mix: "turtle" },
+    normal: { winThresh: 0.60, forceMul: 2.5, advance: true,  mix: "balanced" },
+    hard:   { winThresh: 0.55, forceMul: 2.2, advance: true,  mix: "aggressive" },
+  };
+  const MIXES = {
+    turtle:     [["infantry", 1]],                                 // easy: a passive infantry wall
+    balanced:   [["infantry", 3], ["artillery", 1], ["tank", 1]],  // normal
+    aggressive: [["infantry", 2], ["tank", 2], ["artillery", 1]],  // hard: more armour to press attacks
+  };
+  const level = (g) => LEVELS[(g.options && g.options.aiLevel)] || LEVELS.normal;
+
   // ---------- quick battle estimator (expected-value rounds, no dice) ----------
   function punch(units, attacking, land) {
     let support = attacking && land ? units.filter(u => u.type === "artillery").length : 0;
@@ -94,9 +110,8 @@
     const myTransports = g.units.filter(u => !u.dead && u.power === p && u.type === "transport").length;
     const wantTransport = (p === "uk" || p === "us" || p === "japan") && myTransports < 2 && budget >= 7 && !capThreat;
     if (wantTransport) { g.buy("transport", 1); budget -= 7; }
-    // core land mix — infantry-heavy when threatened
-    const mix = capThreat ? [["infantry", 1]] :
-      [["infantry", 3], ["artillery", 1], ["tank", 1]];
+    // core land mix — infantry-heavy when threatened, otherwise per difficulty
+    const mix = capThreat ? [["infantry", 1]] : (MIXES[level(g).mix] || MIXES.balanced);
     let i = 0, guard = 0;
     while (budget >= 3 && guard++ < 100) {
       const [unit] = mix[i % mix.length];
@@ -120,6 +135,7 @@
   // ---------- combat move ----------
   function combatMove(g) {
     const p = g.current;
+    const L = level(g);
     // candidate targets: enemy land territories & hostile sea zones adjacent to my forces
     const targets = new Map(); // id -> attackers[]
     for (const u of g.units) {
@@ -141,7 +157,7 @@
       return { id, atk, def, est, score: est.win * (val(g, id) + 2) - (1 - est.win) * 3 };
     }).filter(t => {
       if (!t.def.length && !g.space(t.id).sea) return true;   // free capture
-      return t.est.win >= 0.6 && t.score > 0;
+      return t.est.win >= L.winThresh && t.score > 0;
     }).sort((a, b) => b.score - a.score);
 
     const used = new Set();
@@ -151,11 +167,11 @@
       if (!avail.length) continue;
       if (def.length) {
         const est = estimate(avail.map(a => a.u), def, !g.space(t.id).sea);
-        if (est.win < 0.6) continue;
+        if (est.win < L.winThresh) continue;
       }
-      // send land units first, then support; cap force at ~2.5x defenders for efficiency
+      // send land units first, then support; cap force per difficulty (higher = more wasteful)
       avail.sort((a, b) => UNITS[a.u.type].cost - UNITS[b.u.type].cost);
-      const capN = def.length ? Math.max(2, Math.ceil(def.length * 2.5)) : 1;
+      const capN = def.length ? Math.max(2, Math.ceil(def.length * L.forceMul)) : 1;
       let sent = 0;
       for (const a of avail) {
         if (sent >= capN) break;
@@ -191,6 +207,7 @@
   // ---------- noncombat ----------
   function noncombat(g) {
     const p = g.current;
+    const advance = level(g).advance; // easy AI turtles (holds position); others march to the front
     // distance map to nearest enemy-owned land (through friendly/neutral-free paths, land graph approx)
     const dist = enemyDistanceMap(g, p);
     for (const u of g.units.slice()) {
@@ -199,6 +216,7 @@
       if (info.facility || u.moved >= info.move) continue;
       if (info.air) { landAir(g, u); continue; }
       if (info.sea) continue; // v1: fleet holds position unless landing fighters (carriers stay)
+      if (!advance) continue; // easy: land units stay put
       // land units walk toward the front
       const r = g.reachable(u, "noncombatMove");
       let best = null, bestD = dist.get(u.space) ?? 99;

@@ -51,7 +51,7 @@
     //           territoryOverrides: {spaceId: power} }
     constructor(config) {
       this.map = config.mapData;
-      this.options = Object.assign({ straits: false, interceptors: false, totalVictory: false, superBomber: false }, config.options);
+      this.options = Object.assign({ straits: false, interceptors: false, totalVictory: false, superBomber: false, aiLevel: "normal" }, config.options);
       this.players = config.players;
       this.seed = config.seed == null ? Math.floor(Math.random() * 2 ** 31) : config.seed;
       this._rngCalls = 0;
@@ -618,10 +618,19 @@
     }
 
     // ---------- phase: income & turn end ----------
+    _aiIncomeMul(p) {
+      if (!this.players || !this.players[p] || this.players[p].type !== "ai") return 1;
+      return this.options.aiLevel === "hard" ? 1.25 : 1; // only Hard AI gets the bonus
+    }
     collectIncome() {
       const p = this.current;
       if (this.capitalHeld(p)) {
-        const amt = this.production(p);
+        let amt = this.production(p);
+        // Hard computer opponents get a small economic handicap so they can field a
+        // tougher force. Applies to AI-controlled powers only — the human's income is
+        // untouched, and the base rules are unchanged.
+        const mul = this._aiIncomeMul(p);
+        if (mul !== 1) amt = Math.round(amt * mul);
         this.ipc[p] += amt;
         this._log(`${POWER_NAMES[p]} collects ${amt} IPCs (treasury ${this.ipc[p]})`);
       } else {

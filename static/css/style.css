@@ -70,6 +70,9 @@ h1, h2, h3, .btn, label { text-transform: uppercase; letter-spacing: 0.06em; }
   color: var(--dim); text-transform: none; letter-spacing: 0; cursor: pointer; line-height: 1.5; }
 .setting b { color: var(--text); letter-spacing: .05em; }
 .setting input { transform: scale(1.4); margin-right: 10px; accent-color: var(--gold); }
+.setting-select { display: block; margin-top: 8px; background: #101215; color: var(--text);
+  border: 1px solid var(--gold-dim); border-radius: 6px; padding: 8px 10px; font: inherit;
+  width: 100%; max-width: 360px; touch-action: manipulation; }
 #new-start { margin-left: auto; max-width: 300px; }
 
 /* ---------- game screen ---------- */
