@@ -128,6 +128,11 @@
       }
     }
     carrierFighters(carrier) { return this.units.filter(u => !u.dead && u.onCarrier === carrier.id); }
+    // a friendly aircraft carrier with an open deck slot in this sea zone (fighters only)
+    _carrierRoomAt(power, seaZoneId) {
+      return this.unitsAt(seaZoneId, x => x.type === "carrier" && this.isFriendly(power, x.power))
+        .some(c => this.carrierFighters(c).length < 2);
+    }
     cargoOf(t) { return this.units.filter(u => !u.dead && u.onTransport === t.id); }
 
     production(power) {
@@ -225,15 +230,22 @@
             // air moves anywhere except neutral/impassable territories
             if (!ns.sea && ns.impassable) continue;
             seen.set(nb, cost);
+            // An aircraft may FLY OVER a sea zone, but it can only END in one to attack
+            // (a hostile sea zone it can land back from) or, for a fighter, to land on a
+            // friendly aircraft carrier that has room. A plane may never simply sit at sea
+            // alone, and a bomber can never end in a sea zone. (Applies to every power.)
+            const carrierLanding = ns.sea && u.type === "fighter" && this._carrierRoomAt(power, nb);
             if (combat) {
               // combat move: an aircraft may only END on a hostile space (an attack),
               // and only if it can still reach a friendly landing spot afterwards.
               const hostile = this.isHostileSpace(power, nb) || this.hasEnemyUnits(power, nb);
               const canLand = hostile &&
                 (typeof this.airCanLandAfter === "function" ? this.airCanLandAfter(u, nb, cost) : true);
-              res.set(nb, { cost, hostile, endOk: hostile && canLand });
+              const endOk = ns.sea ? (hostile ? canLand : carrierLanding) : (hostile && canLand);
+              res.set(nb, { cost, hostile, endOk });
             } else {
-              res.set(nb, { cost });
+              // noncombat: land anywhere friendly; at sea only a fighter onto a carrier
+              res.set(nb, { cost, endOk: ns.sea ? carrierLanding : true });
             }
             frontier.push({ at: nb, used: cost });
             continue;
@@ -430,7 +442,9 @@
     // declare a strategic bombing raid for a bomber sitting over an enemy IC territory
     setSBR(unitId) {
       const u = this.unit(unitId);
-      if (!u || (u.type !== "bomber" && u.type !== "superbomber")) throw new Error("not a bomber");
+      // Only a PLAIN bomber runs a strategic bombing raid. A Super Bomber always makes
+      // its annihilating strike — it never bombs a factory for damage.
+      if (!u || u.type !== "bomber") throw new Error("not a bomber");
       const s = this.space(u.space);
       if (s.sea || !this.isHostileSpace(u.power, u.space) ||
         !this.unitsAt(u.space, x => x.type === "factory").length) throw new Error("no enemy IC here");

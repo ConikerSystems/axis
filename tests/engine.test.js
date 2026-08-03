@@ -674,5 +674,29 @@ t("combat move: aircraft only target hostile spaces, and must be able to land ba
   ok(targets.every(([id]) => g.isHostileSpace("germany", id) || g.hasEnemyUnits("germany", id)), "every air target is hostile");
 });
 
+t("aircraft may not sit at sea alone; a fighter may land on a friendly carrier (all powers)", () => {
+  const g = mk(); g.turnIndex = 1; g.phase = "noncombatMove"; // germany
+  const start = Object.keys(MAP.spaces).find(id => !MAP.spaces[id].sea && !MAP.spaces[id].impassable &&
+    g.owner[id] === "germany" && MAP.spaces[id].conn.some(n => MAP.spaces[n].sea));
+  ok(start, "found a German coastal territory");
+  const seaZone = MAP.spaces[start].conn.find(n => MAP.spaces[n].sea);
+  for (const u of g.unitsAt(seaZone)) u.dead = true; g.units = g.units.filter(u => !u.dead); // empty the zone
+  const ftr = g._spawn("fighter", "germany", start);
+  let r = g.reachable(ftr, "noncombatMove");
+  ok(r.has(seaZone), "the empty sea zone is within range (fly-over)");
+  eq(r.get(seaZone).endOk, false, "a fighter may not END in an empty sea zone");
+  let threw = false; try { g.moveUnit(ftr.id, seaZone, "noncombatMove"); } catch (e) { threw = true; }
+  ok(threw, "moving a fighter to empty sea is rejected");
+  // add a friendly carrier with room → the fighter may now land there
+  g._spawn("carrier", "germany", seaZone);
+  r = g.reachable(ftr, "noncombatMove");
+  eq(r.get(seaZone).endOk, true, "a fighter may land on a friendly carrier");
+  g.moveUnit(ftr.id, seaZone, "noncombatMove");
+  eq(ftr.space, seaZone, "fighter moved to the carrier's sea zone");
+  // a bomber may never end in a sea zone, carrier present or not
+  const bmb = g._spawn("bomber", "germany", start);
+  eq(g.reachable(bmb, "noncombatMove").get(seaZone).endOk, false, "a bomber may never end at sea");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

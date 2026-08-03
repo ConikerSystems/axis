@@ -942,19 +942,17 @@ window.UI = (function () {
       buttons.unshift({ label: "➤ MOVE UNITS", cls: "primary", value: "movePick" });
     // special orders in combat move
     if (game.phase === "combatMove" && game.players[game.current].type === "human") {
-      // A bomber sitting over an enemy Industrial Complex — plain OR super — chooses its
-      // mission: ATTACK (join the battle; a Super Bomber's strike wipes the defenders and
-      // captures the territory) or a STRATEGIC BOMBING RAID (damage the factory instead).
+      // A PLAIN bomber sitting over an enemy Industrial Complex chooses its mission:
+      // ATTACK (join the battle) or a STRATEGIC BOMBING RAID (damage the factory instead).
       // Attack is the default; the raid is the opt-in alternative, shown clearly here.
+      // Super Bombers are not offered a raid — they always make their annihilating strike.
       const enemyIC = !s.sea && game.isHostileSpace(game.current, id) && game.unitsAt(id, u => u.type === "factory").length;
-      const bombersHere = game.unitsAt(id, u => u.power === game.current && (u.type === "bomber" || u.type === "superbomber"));
+      const bombersHere = game.unitsAt(id, u => u.power === game.current && u.type === "bomber");
       if (enemyIC && bombersHere.length) {
         const flagged = bombersHere.filter(u => u.sbr);
-        const hasSuper = bombersHere.some(u => u.type === "superbomber");
         body.appendChild(div("modal-note",
           "🛩 <b>Bomber over an enemy Industrial Complex</b> — choose its mission:<br>" +
-          "• <b>⚔ Attack</b> — join the battle" +
-          (hasSuper ? "; a Super Bomber's strike wipes out the defenders and captures the territory (the complex is left standing)." : ".") +
+          "• <b>⚔ Attack</b> — join the battle against the defenders." +
           "<br>• <b>🛩 Strategic Bombing Raid</b> — bomb the factory for damage instead of fighting." +
           `<br><i>Currently: ${flagged.length ? "Strategic Bombing Raid" : "Attack"}.</i>`));
         if (flagged.length < bombersHere.length)
@@ -969,14 +967,14 @@ window.UI = (function () {
     openModal(s.name.toUpperCase(), body, buttons).then((v) => {
       if (v === "sbr") {
         let n = 0;
-        for (const b of game.unitsAt(id, u => u.power === game.current && (u.type === "bomber" || u.type === "superbomber") && !u.sbr)) {
+        for (const b of game.unitsAt(id, u => u.power === game.current && u.type === "bomber" && !u.sbr)) {
           try { game.setSBR(b.id); n++; } catch (e) { banner(e.message); }
         }
         if (n) banner("Strategic bombing raid declared on " + s.name);
       }
       if (v === "attackNoRaid") {
-        for (const b of game.unitsAt(id, u => u.power === game.current && u.sbr === id)) delete b.sbr;
-        banner("Bombers will attack " + s.name + " (raid cancelled).");
+        for (const b of game.unitsAt(id, u => u.power === game.current && u.type === "bomber" && u.sbr === id)) delete b.sbr;
+        banner("Bomber will attack " + s.name + " (raid cancelled).");
       }
       if (v === "seaAtk") { game.toggleSeaAttack(id); banner(game.declaredSeaAttacks.has(id) ? "Attack declared" : "Attack cancelled"); }
       if (v === "movePick") openMovePicker(id, game.current, null);
@@ -1072,22 +1070,19 @@ window.UI = (function () {
   const isEnemyIC = (to) => { const t = MAP.spaces[to]; return t && !t.sea &&
     game.isHostileSpace(game.current, to) && game.unitsAt(to, u => u.type === "factory").length > 0; };
 
-  // When a bomber (plain or super) is sent onto an enemy Industrial Complex, ask right
-  // away what it should do — ATTACK (join the battle; a super bomber's strike captures
-  // the territory) or a STRATEGIC BOMBING RAID (damage the factory). Attack is the default.
+  // When a PLAIN bomber is sent onto an enemy Industrial Complex, ask right away what it
+  // should do — ATTACK (join the battle) or a STRATEGIC BOMBING RAID (damage the factory).
+  // Attack is the default. Super Bombers never get this choice: they always annihilate.
   function bomberMissionDialog(id) {
     const s = MAP.spaces[id];
-    const bombers = game.unitsAt(id, u => u.power === game.current &&
-      (u.type === "bomber" || u.type === "superbomber") && !u.sbrDone);
+    const bombers = game.unitsAt(id, u => u.power === game.current && u.type === "bomber" && !u.sbrDone);
     if (!bombers.length) return;
-    const hasSuper = bombers.some(u => u.type === "superbomber");
     const many = bombers.length > 1;
     const body = div("");
     body.appendChild(div("modal-note",
       `Your bomber${many ? "s" : ""} reached <b>${s.name}</b> — an enemy Industrial Complex. Choose the mission:`));
     body.appendChild(div("modal-note",
-      "• <b>⚔ Attack</b> — join the battle" +
-      (hasSuper ? "; a Super Bomber's strike wipes out the defenders and captures the territory (the complex is left standing)." : ".") +
+      "• <b>⚔ Attack</b> — join the battle against the defenders." +
       "<br>• <b>🛩 Strategic Bombing Raid</b> — bomb the factory for damage instead of fighting."));
     openModal("BOMBER MISSION — " + s.name.toUpperCase(), body, [
       { label: "⚔ ATTACK", cls: "primary", value: "attack" },
@@ -1103,10 +1098,10 @@ window.UI = (function () {
       board.render();
     });
   }
-  // offer the mission choice if this move landed a bomber on an enemy complex
+  // offer the mission choice if this move landed a PLAIN bomber on an enemy complex
   function maybeBomberMission(to, rows) {
     if (game.phase === "combatMove" && isEnemyIC(to) &&
-      rows.some(r => r.take > 0 && (r.type === "bomber" || r.type === "superbomber")))
+      rows.some(r => r.take > 0 && r.type === "bomber"))
       bomberMissionDialog(to);
   }
 
@@ -1942,9 +1937,10 @@ window.UI = (function () {
           <b>USA Super Bomber</b> option appears in game setup (hotseat &amp; online). Flies 12, carries a
           man, and is <b>immune to AA</b>; its strike <b>always wins</b> — it wipes out every enemy piece at the
           target (land or sea), then the man seizes the territory. The <b>industrial complex is left
-          standing</b> and captured, not destroyed. <b>Every US bomber is a super bomber</b> (uniform power,
-          upgraded automatically at the US turn). Over an enemy complex you choose its mission:
-          attack (the strike) or a strategic bombing raid (damage the factory).
+          standing</b> and captured, not destroyed. <b>USA only</b>; every US bomber is a super bomber
+          (uniform power, upgraded automatically at the US turn) and <b>always makes its strike</b> —
+          it never runs an ordinary bombing raid. (Regular bombers, for the other powers, still choose
+          attack vs. a strategic bombing raid over an enemy complex.)
         </label>
       </div>
       <div class="admin-sec">

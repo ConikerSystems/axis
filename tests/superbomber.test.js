@@ -76,27 +76,19 @@ t("upgrade blocked when option off / non-US / not a bomber", () => {
   ok(threw, "should refuse when option disabled");
 });
 
-t("SBR: setSBR accepts a super bomber", () => {
+t("SBR: a super bomber is NEVER set to a bombing raid (it always annihilates)", () => {
   const g = mk({ options: { superBomber: true } });
   g.turnIndex = 4; g.phase = "combatMove";
   const sb = g._spawn("superbomber", "us", "germany"); // over the enemy IC
-  g.setSBR(sb.id);
-  eq(sb.sbr, "germany");
+  let threw = false; try { g.setSBR(sb.id); } catch (e) { threw = true; }
+  ok(threw, "setSBR refuses a super bomber");
+  ok(!sb.sbr, "no raid flag set");
+  // a plain bomber, however, can still declare a strategic bombing raid
+  const b = g._spawn("bomber", "us", "germany");
+  g.setSBR(b.id);
+  eq(b.sbr, "germany", "plain bomber can raid");
 });
 
-t("super bomber can run a strategic bombing raid (immune to AA, damages the IC, no capture)", () => {
-  const g = mk({ options: { superBomber: true } });
-  g.turnIndex = 4; g.phase = "combat";
-  const sb = g._spawn("superbomber", "us", "germany"); // germany has an IC + an AA gun
-  g.setSBR(sb.id);
-  g.battles = [{ space: "germany", sbr: true, resolved: false }];
-  force(g, 1); // AA rolls 1s (a hit for a normal bomber) — the super bomber is immune
-  const before = g.icDamage["germany"] || 0;
-  autoBattle(g, "germany", { sbr: true });
-  ok(!sb.dead, "super bomber cannot be shot down during a raid");
-  ok((g.icDamage["germany"] || 0) > before, "the raid applied bombing damage to the complex");
-  eq(g.owner["germany"], "germany", "a bombing raid does not capture the territory");
-});
 t("strike ALWAYS annihilates all defenders + the complex; man seizes the territory", () => {
   const g = mk({ options: { superBomber: true } });
   g.turnIndex = 4; g.phase = "combat";
