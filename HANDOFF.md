@@ -1,6 +1,22 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-04 (v1.15.5)_
+_Updated: 2026-08-04 (v1.15.6)_
+
+## v1.15.6 (2026-08-04) — security hardening + relay repo de-hardcoded
+- **Online play is OFF by default** and gated: the two 🌐 home buttons are grayed/locked
+  (solo & hotseat unaffected); a tap explains what it needs (a **private** relay repo — not
+  public — + a scoped token) and the risk. Admin has an enable toggle; accepting an invite
+  opts in automatically. Runs on **free GitHub** — the app site stays a public GitHub Pages
+  repo (Pages needs public on free; nothing secret is committed), and online play uses a
+  **separate private** relay repo.
+- **No relay account is hardcoded anymore.** `DEFAULT_REPO` in `online.js` is now empty; the
+  host enters their own **`owner/repo`** in Online Setup (stored in config, shared via the
+  invite `&r=`). This keeps any specific relay account out of the public source. Earlier notes
+  below mention a specific account — that is no longer baked into the code.
+- **XSS hardening + CSP:** all user/opponent-controlled strings (titles, names, ids, summary,
+  log) are HTML-escaped before `innerHTML`; a Content-Security-Policy meta blocks inline-script
+  execution and limits network to self + `api.github.com`; invite-link params (id/repo/token)
+  are validated at the entry point. See `LEARNINGS.md` for the reusable write-up.
 
 ## v1.15.5 (2026-08-04) — enforce carrier deck limit (2 fighters)
 Stops a carrier from being offered to more fighters than its two-fighter deck holds.
@@ -78,25 +94,25 @@ setup (hotseat or online).
 - **Tests:** `tests/superbomber.test.js` (10) — stats, upgrade, strike hit/miss, AA shoot-down,
   fighter soak, sea, undefended seize. Browser-tested end-to-end (admin → setup → US purchase).
 
-## v1.9.7–1.9.8 (2026-08-02) — relay moved to a dedicated throwaway account (Raj78789494/axis)
+## v1.9.7–1.9.8 (2026-08-02) — relay moved to a dedicated throwaway account (<your-relay-account>/<relay-repo>)
 
 ## v1.9.7–1.9.8 (2026-08-02) — relay moved to a dedicated throwaway account
-- **`DEFAULT_REPO` → `Raj78789494/axis`** (`online.js`; the relay repo Joe created on that account). The online-play relay now
+- _(superseded in v1.15.x — `DEFAULT_REPO` is now empty; the relay repo is entered in Online Setup, not hardcoded.)_ Historically the relay repo lived on a dedicated throwaway account. The online-play relay now
   lives on a separate, valueless GitHub account that owns *only* the games repo — so a
   worst-case token leak (or a mis-scoped token) touches nothing of value on the main
   `ConikerSystems` account. This is the zero-human-error guarantee from the analysis below.
 - `Online.defaultRepo` is now exported; the invite-link `&r=` check in `ui.js` compares
   against it instead of a hardcoded string (so the relay owner only has to change in one
   place).
-- **The host token must be created under the `Raj78789494` account**, scoped to
-  `Raj78789494/axis`, Contents R/W only. Online play only — local hotseat / vs-AI
+- **The host token must be created under the `<your-relay-account>` account**, scoped to
+  `<your-relay-account>/<relay-repo>`, Contents R/W only. Online play only — local hotseat / vs-AI
   games never touch GitHub.
 
 ### Online-play setup — recorded facts (for future sessions)
-- **Relay repo:** `Raj78789494/axis` (private) on Joe's dedicated/throwaway GitHub
+- **Relay repo:** `<your-relay-account>/<relay-repo>` (private) on Joe's dedicated/throwaway GitHub
   account — holds only `games/<id>.json`, nothing of value.
 - **Host token:** fine-grained PAT named **`axis_multiplayer`**, made under the
-  `Raj78789494` account, scoped to that one repo. Permissions: **Contents: Read and
+  `<your-relay-account>` account, scoped to that one repo. Permissions: **Contents: Read and
   write** + **Metadata: Read-only** (auto). Nothing else.
 - **Token expires: 2027-08-02.** ⏰ Before then, regenerate a new fine-grained token the
   same way and re-paste it into the app's Online Setup, or online play stops (the app
@@ -131,7 +147,7 @@ carries their GitHub token, so the app now hard-locks what token it will store:
    Fine-grained tokens → Generate new token** (or tap "COPY GITHUB TOKEN-PAGE LINK" in
    Online Setup).
 2. Name it (e.g. **axis-relay**), set an expiry.
-3. **Resource owner:** the **Raj78789494** account · **Repository access → Only select
+3. **Resource owner:** the **<your-relay-account>** account · **Repository access → Only select
    repositories → `axis`** (never "All repositories"). Sign into GitHub as that
    account (not ConikerSystems) when creating the token.
 4. **Permissions → Repository → Contents → Read and write.** Everything else "No access."
@@ -148,16 +164,14 @@ carries their GitHub token, so the app now hard-locks what token it will store:
   account (e.g. `coniker-games`) that owns *only* `axis-multiplayer` means even a worst-case
   leak — or a mis-created "All repositories" token — touches a valueless account, never
   the main one. Cost: manage one extra free account; point `DEFAULT_REPO` in `online.js`
-  at `<newaccount>/axis-multiplayer`. **Recommended if you want a zero-human-error guarantee.**
-  ✅ **Done (v1.9.7–1.9.8)** — relay moved to `Raj78789494/axis` (the repo created on that account).
-  🔁 **Updated (v1.15.1)** — relay `DEFAULT_REPO` re-pointed to `ConikerSystems/axis-multiplayer`
-  (the renamed private relay on the main account). Trade-off: this drops the separate-account
-  isolation from v1.9.7 — the shared PAT must be fine-grained, scoped to **only**
-  `axis-multiplayer`, Contents read/write, so a leak can't touch anything else on the account.
-  **Token carries over the rename:** fine-grained PATs scope access by the repo's internal
-  ID, not its name, so the existing `axis-games` token keeps working against `axis-multiplayer`
-  unchanged — no need to recreate it. (Only a different repo/account, e.g. the old
-  `Raj78789494/axis` token, or an expired/regenerated token, would require a new one.)
+  at `<newaccount>/<relay-repo>`. **Recommended if you want a zero-human-error guarantee.**
+  ✅ **Done (v1.9.7–1.9.8)** — relay originally moved to a dedicated throwaway account.
+  🔁 **Updated (v1.15.6)** — `DEFAULT_REPO` is now **empty**: the relay repo is entered by the
+  host in Online Setup (stored in config, shared via the invite link), so **no specific account
+  is baked into the public source**. Whatever repo you use, the token must be fine-grained and
+  scoped to **only** that one repo (Contents read/write), so a leak can't touch anything else.
+  (Fine-grained PATs scope by the repo's internal ID, not its name, so renaming a repo doesn't
+  invalidate an existing token; a different repo/account or an expired token needs a new one.)
 
 ## v1.9.3 (2026-08-02) — selection & movement polish (7 features)
 1. **Selected-piece ring**: the exact stacks you chose in the move picker get a bright

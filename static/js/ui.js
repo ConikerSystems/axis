@@ -1683,17 +1683,19 @@ window.UI = (function () {
       const wrap = div("modal");
       wrap.appendChild(div("modal-title", "ONLINE SETUP"));
       const body = div("modal-body");
-      const repoName = (Online.repo().split("/")[1]) || "axis";
       body.innerHTML = `
         <div class="modal-note"><b>Invited by someone?</b> Just tap the link they texted you instead — no setup needed.</div>
-        <div class="modal-note"><b>Hosting games?</b> One-time setup. Create a GitHub key that can touch
-          <b>only</b> the games repo (<b>${Online.repo()}</b>) — never the rest of your account:</div>
+        <div class="modal-note"><b>Hosting games?</b> One-time setup. Make a <b>dedicated, PRIVATE</b> GitHub repo
+          (on any account — ideally a throwaway one, not your main account) to use as the game mailbox, then create a
+          key that can touch <b>only that one repo</b> — never the rest of the account:</div>
         <div class="btn" id="ol-helper" style="display:block;margin:4px auto 8px;max-width:320px;">📋 COPY GITHUB TOKEN-PAGE LINK</div>
         <ol style="text-align:left;font-size:.82rem;margin:4px auto 8px;max-width:340px;line-height:1.5;padding-left:20px">
+          <li>Create a <b>private</b> repo on GitHub (any name, e.g. <b>axis-relay</b>). Enter it as
+              <b>owner/repo</b> below.</li>
           <li>Open <code style="word-break:break-all">github.com/settings/personal-access-tokens/new</code>
-              in Safari (tap COPY above), signed in as the <b>relay</b> account.</li>
-          <li>Token name: <b>${repoName}</b>. Pick an expiry.</li>
-          <li><b>Repository access → Only select repositories → ${repoName}.</b>
+              in Safari (tap COPY above), signed in as that account.</li>
+          <li>Token name: anything. Pick an expiry.</li>
+          <li><b>Repository access → Only select repositories → your relay repo.</b>
               <u>Do NOT choose “All repositories.”</u></li>
           <li><b>Permissions → Repository → Contents → Read and write.</b> Leave everything else “No access.”
               (GitHub adds “Metadata: Read-only” automatically — that's fine.)</li>
@@ -1701,8 +1703,9 @@ window.UI = (function () {
               manager under this GitHub account</b> — GitHub shows it only once — then paste it below.</li>
         </ol>
         <div class="modal-note" style="font-size:.78rem;color:var(--dim)">🔒 The app only accepts a fine-grained,
-          <b>${repoName}</b>-only token. A broad or classic token is rejected — it can never end up in an invite link.</div>
+          single-repo token. A broad or classic token is rejected — it can never end up in an invite link.</div>
         <input id="ol-name" class="ol-input" type="text" maxlength="14" placeholder="YOUR NAME (e.g. JOE)">
+        <input id="ol-repo" class="ol-input" type="text" placeholder="RELAY REPO (owner/repo)">
         <input id="ol-token" class="ol-input" type="password" placeholder="GITHUB TOKEN (github_pat_…)">
         <div class="modal-note" id="ol-status"></div>`;
       body.querySelector("#ol-helper").onclick = async () => {
@@ -1717,25 +1720,30 @@ window.UI = (function () {
       const ov = showOverlay(wrap);
       const cfg = Online.config() || {};
       body.querySelector("#ol-name").value = cfg.name || "";
+      body.querySelector("#ol-repo").value = cfg.repo || "";
       body.querySelector("#ol-token").value = cfg.token || "";
       cancel.onclick = () => { ov.remove(); resolve(false); };
       const fail = (st, msg) => { st.innerHTML = `<span style="color:var(--red)">✗ ${msg}</span>`; };
       save.onclick = async () => {
         const name = body.querySelector("#ol-name").value.trim();
+        const repo = body.querySelector("#ol-repo").value.trim();
         const token = body.querySelector("#ol-token").value.trim();
         const st = body.querySelector("#ol-status");
-        if (!name || !token) { st.textContent = "Both fields are required."; return; }
+        if (!name || !repo || !token) { st.textContent = "Name, relay repo, and token are all required."; return; }
+        if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) {
+          return fail(st, `The relay repo must be <b>owner/repo</b> (e.g. <b>myaccount/axis-relay</b>).`);
+        }
         // HARD LOCK — the app will only ever store a fine-grained token. Classic
         // (ghp_…) / OAuth tokens are account-wide and would leak the whole account
         // through the invite link, so they are rejected outright (no override).
         if (!/^github_pat_/.test(token)) {
           return fail(st, `Blocked — that isn't a fine-grained token. A classic token can reach your ` +
             `<b>whole GitHub account</b>, so the app won't use it. Create a fine-grained token limited to ` +
-            `<b>${repoName}</b> (it starts with <code>github_pat_</code>) using the steps above.`);
+            `<b>${esc(repo)}</b> (it starts with <code>github_pat_</code>) using the steps above.`);
         }
         st.textContent = "Checking the token against GitHub…";
-        Online.saveConfig({ name, token, repo: Online.repo() });
-        const clearBad = () => Online.saveConfig({ name, token: "", repo: Online.repo() });
+        Online.saveConfig({ name, token, repo });
+        const clearBad = () => Online.saveConfig({ name, token: "", repo });
         try {
           // Server-confirmed defense in depth: reject anything GitHub reports as
           // carrying account-wide (classic) scopes.
@@ -1743,7 +1751,7 @@ window.UI = (function () {
           if (!info.fineGrained || info.scopes) {
             clearBad();
             return fail(st, `Blocked — GitHub reports this token has account-wide access` +
-              `${info.scopes ? " (" + info.scopes + ")" : ""}. Use a fine-grained token limited to <b>${repoName}</b>.`);
+              `${info.scopes ? " (" + info.scopes + ")" : ""}. Use a fine-grained token limited to <b>${esc(repo)}</b>.`);
           }
           await Online.verifyToken();     // confirms it can actually reach the games repo
           ov.remove(); resolve(true);
@@ -1753,7 +1761,7 @@ window.UI = (function () {
   }
   async function ensureOnlineSetup() {
     const cfg = Online.config();
-    if (cfg && cfg.token && cfg.name) return true;
+    if (cfg && cfg.token && cfg.name && cfg.repo) return true;
     return openOnlineSetup();
   }
 
@@ -2054,7 +2062,6 @@ window.UI = (function () {
   // (so it's documented in the app itself) and will host experimental feature
   // toggles like the USA Super Bomber once its rules are defined.
   const TOKEN_PAGE_URL = "https://github.com/settings/personal-access-tokens/new";
-  const TOKEN_EXPIRES = "August 2, 2027"; // the axis_multiplayer fine-grained token
   const ADMIN_SB_KEY = "axis.admin.superBomber";
   const adminSuperBomber = () => { try { return localStorage.getItem(ADMIN_SB_KEY) === "1"; } catch (e) { return false; } };
   // Online multiplayer is OFF by default — solo/hotseat need none of it. Enabling it is an
@@ -2118,9 +2125,10 @@ window.UI = (function () {
           <b>Solo (vs computer)</b> and <b>hotseat</b> (two people, one device) are
           <b>100% local</b> — no internet or GitHub, ever.<br><br>
           <b>Online play</b> (two people, two devices) needs a way to pass the game between
-          phones. Axis uses one <b>tiny private GitHub repo as a mailbox</b>:
-          <b>${Online.repo()}</b>. Each turn writes a small JSON file; the other device reads
-          it. That repo is the <u>only</u> thing the extra GitHub account does.<br><br>
+          phones. Axis uses one <b>tiny private GitHub repo as a mailbox</b> that <b>you create</b>
+          (ideally on a dedicated throwaway account) and enter in Online Setup. Each turn writes a
+          small JSON file; the other device reads it. That repo is the <u>only</u> thing the token
+          can touch.<br><br>
           You never touch GitHub to play — the app reads/writes it invisibly using the token
           you saved. That repo/account is <b>not the game and not a separate app</b>; it holds
           <b>no code</b>, just game-state files. It is <b>not a Claude Hub app</b> — just
@@ -2128,9 +2136,8 @@ window.UI = (function () {
           in now.)
         </div>
         <div class="modal-note" style="text-align:left;font-size:.82rem;color:var(--dim)">
-          Relay repo: <b>${Online.repo()}</b> · token <b>axis_multiplayer</b> · expires
-          <b>${TOKEN_EXPIRES}</b>.<br>
-          Regenerate a token (sign in as the relay account first):<br>
+          Relay repo: <b>${esc(Online.repo() || "— set it in Online Setup —")}</b><br>
+          Create/regenerate a fine-grained token (sign in as the relay account first):<br>
           <code style="word-break:break-all">${TOKEN_PAGE_URL}</code>
         </div>
       </div>`;
