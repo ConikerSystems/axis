@@ -1,4 +1,4 @@
-/* Online sync test — exercises the real GitHub relay (axis-games repo).
+/* Online sync test — exercises the real GitHub relay (axis-multiplayer repo).
    Run manually: GH_TOKEN=$(gh auth token) node tests/online.test.js
    Not part of the offline suite (needs network + token). */
 global.window = {};
@@ -13,7 +13,7 @@ const Online = window.Online;
 
 const token = process.env.GH_TOKEN;
 if (!token) { console.error("Set GH_TOKEN"); process.exit(1); }
-Online.saveConfig({ name: "TestRunner", token, repo: "ConikerSystems/axis-games" });
+Online.saveConfig({ name: "TestRunner", token, repo: "ConikerSystems/axis-multiplayer" });
 
 (async () => {
   let failed = 0;
