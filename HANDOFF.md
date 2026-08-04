@@ -1,6 +1,18 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-04 (v1.15.4)_
+_Updated: 2026-08-04 (v1.15.5)_
+
+## v1.15.5 (2026-08-04) — enforce carrier deck limit (2 fighters)
+Stops a carrier from being offered to more fighters than its two-fighter deck holds.
+- **`combat.js`**: new `_seaLandingRoom(power, zone, excludeId)` = open deck slots minus
+  fighters already waiting (unseated) in the zone. `airLandingSpots` and `strandedAir` use it,
+  so a 3rd fighter isn't offered a slot two others already claimed.
+- **`combat.js`**: `airCanLandAfter` now requires an **open** deck (`carrierFighters < 2`) —
+  fixes a latent bug where `if (unitsAt(...))` on an array was always truthy, letting a fighter
+  attack when its only "landing" was a full (or nonexistent) carrier.
+- **`engine.js`**: carrier placement seats only up to remaining deck room.
+- **Tests:** `tests/engine.test.js` (+4) — 3rd-fighter-lost, room accounting, no-offer of a full
+  deck, airCanLandAfter full-carrier.
 
 ## v1.15.4 (2026-08-04) — fighters land on a carrier bought this round
 Any power's fighter may now end noncombat over a sea zone where a **just-purchased carrier**
