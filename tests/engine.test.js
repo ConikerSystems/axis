@@ -758,5 +758,65 @@ t("AI difficulty: only a Hard computer power gets the +25% income bonus", () => 
   eq(collect(build("hard", "human")), base, "a human power gets no bonus even at Hard");
 });
 
+console.log("— fighters landing on a carrier purchased this round —");
+
+// find a US-owned factory territory bordering a sea zone (coastal IC)
+function usCoastalIC(g) {
+  for (const [id, s] of Object.entries(MAP.spaces)) {
+    if (!s.sea) continue;
+    const ic = s.conn.find(n => g.owner[n] === "us" && g.unitsAt(n, x => x.type === "factory").length);
+    if (ic && g.eligibleICs("us").includes(ic) && g.mobilizeCapacity(ic) > 0) return { seaZone: id, ic };
+  }
+  return null;
+}
+
+t("fighter waits over the zone and lands on a carrier placed this turn", () => {
+  const g = mk(); g.turnIndex = 4; // US
+  const spot = usCoastalIC(g); ok(spot, "found a US coastal IC");
+  g.phase = "purchase"; g.purchases = [{ unit: "carrier", qty: 1 }]; // bought a carrier
+  const f = g._spawn("fighter", "us", spot.seaZone);                 // flew out in noncombat
+  g.phase = "noncombatMove";
+  g.endNoncombatMove();
+  ok(!f.dead, "fighter is NOT lost — it waits for the purchased carrier");
+  eq(g.phase, "mobilize");
+  g.place("carrier", spot.seaZone);
+  ok(f.onCarrier != null, "fighter lands on the newly placed carrier");
+  g.endMobilize();
+  ok(!f.dead, "fighter survives on the carrier deck");
+});
+
+t("super fighter can also land on a carrier purchased this round", () => {
+  const g = mk({ options: { superBomber: true } }); g.turnIndex = 4;
+  const spot = usCoastalIC(g); ok(spot, "found a US coastal IC");
+  g.phase = "purchase"; g.purchases = [{ unit: "carrier", qty: 1 }];
+  const f = g._spawn("fighter", "us", spot.seaZone); // _spawn flags it super
+  ok(f.super, "it is a super fighter");
+  g.phase = "noncombatMove"; g.endNoncombatMove();
+  ok(!f.dead, "super fighter waits over the zone");
+  g.place("carrier", spot.seaZone);
+  ok(f.onCarrier != null, "super fighter lands on the new carrier");
+});
+
+t("no carrier purchased → the fighter is still lost at sea", () => {
+  const g = mk(); g.turnIndex = 4;
+  const spot = usCoastalIC(g); ok(spot, "found a US coastal IC");
+  g.phase = "purchase"; g.purchases = []; // nothing bought
+  const f = g._spawn("fighter", "us", spot.seaZone);
+  g.phase = "noncombatMove";
+  g.endNoncombatMove();
+  ok(f.dead, "fighter with no carrier and no deck is lost");
+});
+
+t("carrier bought but never placed under it → lost at end of mobilize", () => {
+  const g = mk(); g.turnIndex = 4;
+  const spot = usCoastalIC(g); ok(spot, "found a US coastal IC");
+  g.phase = "purchase"; g.purchases = [{ unit: "carrier", qty: 1 }];
+  const f = g._spawn("fighter", "us", spot.seaZone);
+  g.phase = "noncombatMove"; g.endNoncombatMove();
+  ok(!f.dead, "survives into mobilize");
+  g.endMobilize(); // carrier never placed
+  ok(f.dead, "no deck ended up under it — lost");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
