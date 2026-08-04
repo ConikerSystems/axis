@@ -1,7 +1,7 @@
 /* Single source of truth for the app version. Shown in the footer so a user
    can report which build they're on. Bump this AND the sw.js cache name on
    every deploy. */
-window.APP_VERSION = "1.15.1";
+window.APP_VERSION = "1.15.2";
 
 /* Config for the shared Share/Feedback widget (must be set before feedback.js loads). */
 window.APP_INFO = {

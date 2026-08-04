@@ -36,8 +36,8 @@ function autoBattle(g, spaceId, opts) {
 
 console.log("— super bomber —");
 
-t("unit stats: cost 15, move 12, still a bomber otherwise", () => {
-  eq(UNITS.superbomber.cost, 15); eq(UNITS.superbomber.move, 12);
+t("unit stats: cost 12 (man included), move 24, still a bomber otherwise", () => {
+  eq(UNITS.superbomber.cost, 12); eq(UNITS.superbomber.move, 24);
   eq(UNITS.superbomber.attack, 4); eq(UNITS.superbomber.defense, 1);
   ok(UNITS.superbomber.air && UNITS.superbomber.superBomber);
 });
@@ -59,14 +59,14 @@ t("option off: US bombers stay ordinary bombers", () => {
   ok(g.units.some(u => u.power === "us" && u.type === "bomber" && !u.dead), "bomber not upgraded when option off");
 });
 
-t("upgrade: US bomber → super bomber for +3 IPC", () => {
+t("upgrade: US bomber → super bomber is free (same 12 cost as a bomber)", () => {
   const g = mk({ options: { superBomber: true } });
   g.turnIndex = 4; g.phase = "purchase"; // US
   const bmb = g.units.find(u => u.type === "bomber" && u.power === "us");
   const before = g.ipc.us;
   g.upgradeBomber(bmb.id);
   eq(bmb.type, "superbomber", "type changed");
-  eq(g.ipc.us, before - 3, "3 IPC deducted");
+  eq(g.ipc.us, before, "no IPC deducted — super bomber costs the same as a bomber");
 });
 
 t("upgrade blocked when option off / non-US / not a bomber", () => {
@@ -165,6 +165,36 @@ t("fires again on its next attack (per-combat flag resets each turn)", () => {
   sb.space = "france"; sb.moved = 0; g.phase = "combat";
   force(g, 3); autoBattle(g, "france");
   eq(g.owner["france"], "us", "struck and captured a second time");
+});
+
+t("US fighters fire as attack 6 when the super bomber option is on", () => {
+  const g = mk({ options: { superBomber: true } });
+  g.turnIndex = 4; g.phase = "combat"; // US turn
+  // Clear belorussia and leave a lone enemy AA gun (defense 0 — never fires back).
+  for (const u of g.unitsAt("belorussia", x => x.power === "germany")) u.dead = true;
+  g.units = g.units.filter(u => !u.dead);
+  const aa = g._spawn("aaa", "germany", "belorussia");
+  g._spawn("fighter", "us", "belorussia");
+  force(g, 6); // worst die: a base fighter (attack 3) would MISS; the buffed pip (6) hits
+  autoBattle(g, "belorussia");
+  ok(aa.dead, "US fighter hit on a 6 — its attack pip is 6 with the option on");
+});
+
+t("option off: US fighters keep their ordinary attack of 3 (a 6 misses)", () => {
+  const g = mk(); // super bomber option OFF
+  g.turnIndex = 4; g.phase = "combat";
+  for (const u of g.unitsAt("belorussia", x => x.power === "germany")) u.dead = true;
+  g.units = g.units.filter(u => !u.dead);
+  const aa = g._spawn("aaa", "germany", "belorussia");
+  g._spawn("fighter", "us", "belorussia");
+  force(g, 6); // attack 3 vs a die of 6 → never hits
+  const b = new Combat.Battle(g, "belorussia");
+  let d, guard = 0;
+  while ((d = b.pending()) && guard++ < 50) {
+    if (d.type === "retreat") { b.decide({ retreat: true, to: d.options[0] }); break; }
+    b.decide(d.type === "casualties" ? { units: d.pool.slice() } : { units: [] });
+  }
+  ok(!aa.dead, "without the option the fighter misses on a 6 (attack stays 3)");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -23,10 +23,11 @@
     factory: { cost: 15, move: 0, attack: 0, defense: 0, facility: true },
     fighter: { cost: 10, move: 4, attack: 3, defense: 4, air: true },
     bomber: { cost: 12, move: 6, attack: 4, defense: 1, air: true },
-    // USA-only Super Bomber (Admin option). Carries a man (the +3 over a bomber),
-    // flies 12, is immune to AA, and on attack ALWAYS wins its super-strike — it
-    // annihilates every enemy piece at the target and leaves the IC standing (see combat.js).
-    superbomber: { cost: 15, move: 12, attack: 4, defense: 1, air: true, superBomber: true },
+    // USA-only Super Bomber (Admin option). Costs 12 with its carried man (infantry)
+    // included, flies 24 (enough to reach anywhere on the map), is immune to AA, and on
+    // attack ALWAYS wins its super-strike — it annihilates every enemy piece at the
+    // target and leaves the IC standing (see combat.js).
+    superbomber: { cost: 12, move: 24, attack: 4, defense: 1, air: true, superBomber: true },
     submarine: { cost: 6, move: 2, attack: 2, defense: 1, sea: true, sub: true },
     transport: { cost: 7, move: 2, attack: 0, defense: 0, sea: true, transport: true, capacity: true },
     destroyer: { cost: 8, move: 2, attack: 2, defense: 2, sea: true, surface: true, antiSub: true },
@@ -406,14 +407,15 @@
       if ((ex ? ex.qty : qty) < 0) throw new Error("negative");
     }
     // USA-only (Admin option): upgrade an existing bomber to a Super Bomber for the
-    // +3 IPC difference. Deducts immediately so purchase accounting/undo stay simple.
+    // IPC difference — now 0, since a Super Bomber costs the same 12 as a bomber.
+    // Deducts immediately so purchase accounting/undo stay simple.
     upgradeBomber(unitId) {
       if (this.phase !== "purchase") throw new Error("wrong phase");
       if (!this.options.superBomber) throw new Error("super bomber not enabled");
       if (this.current !== "us") throw new Error("US only");
       const u = this.unit(unitId);
       if (!u || u.dead || u.power !== "us" || u.type !== "bomber") throw new Error("not a US bomber");
-      const cost = UNITS.superbomber.cost - UNITS.bomber.cost; // 3
+      const cost = UNITS.superbomber.cost - UNITS.bomber.cost; // 0 (same base cost as a bomber)
       if (this.purchaseSpent() + cost > this.ipc.us) throw new Error("not enough IPCs");
       this.ipc.us -= cost;
       u.type = "superbomber";
