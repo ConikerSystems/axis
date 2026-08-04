@@ -1,6 +1,19 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-04 (v1.15.3)_
+_Updated: 2026-08-04 (v1.15.4)_
+
+## v1.15.4 (2026-08-04) — fighters land on a carrier bought this round
+Any power's fighter may now end noncombat over a sea zone where a **just-purchased carrier**
+will be placed, and land on it when it mobilizes (rulebook p.16). Applies to super fighters too
+(they're the `fighter` type). Combat-move eligibility (`airCanLandAfter`) already allowed the
+attack; this fills in the landing resolution:
+- **`engine.js`**: `_pendingCarrierZone(power, zone)` — bought a carrier + zone borders an owned
+  factory. `place()` seats waiting friendly fighters when a carrier is placed. `endMobilize()`
+  sweeps any fighter left with no deck (lost at sea).
+- **`combat.js`**: `endNoncombatMove` lets a fighter wait over a pending-carrier zone instead of
+  crashing; `strandedAir` no longer false-warns for it.
+- **Tests:** `tests/engine.test.js` (+4) — waits-and-lands, super-fighter variant, no-carrier
+  still-lost, bought-but-not-placed lost.
 
 ## v1.15.3 (2026-08-04) — Super Fighter upgrade + AI awareness
 Makes the fighter buff a proper **upgrade** (parity with the Super Bomber) and teaches the AI.

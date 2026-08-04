@@ -614,7 +614,8 @@
       if (!s.sea && this.friendlyAtStart(u.space)) return false;
       if (u.type === "fighter" && s.sea && (u.onCarrier ||
         this.unitsAt(u.space, x => this.isFriendly(x.power, u.power) && x.type === "carrier" &&
-          this.carrierFighters(x).length < 2).length)) return false;
+          this.carrierFighters(x).length < 2).length ||
+        this._pendingCarrierZone(u.power, u.space))) return false;
       return true;
     });
   };
@@ -629,6 +630,8 @@
         const c = this.unitsAt(u.space, x => this.isFriendly(x.power, u.power) && x.type === "carrier" &&
           this.carrierFighters(x).length < 2)[0];
         if (c) { u.onCarrier = c.id; continue; }
+        // wait over a zone where a purchased carrier can be placed — it lands at mobilize
+        if (this._pendingCarrierZone(u.power, u.space)) continue;
       }
       lost.push(u);
     }

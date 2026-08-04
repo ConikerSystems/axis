@@ -138,6 +138,15 @@
       return this.unitsAt(seaZoneId, x => x.type === "carrier" && this.isFriendly(power, x.power))
         .some(c => this.carrierFighters(c).length < 2);
     }
+    // A sea zone where `power` could place a just-purchased carrier this turn: they bought
+    // at least one carrier and the zone borders a factory they own. Fighters are allowed to
+    // end noncombat over such a zone and land when the carrier mobilizes (rulebook p.16).
+    _pendingCarrierZone(power, seaZoneId) {
+      if (!this.purchases.some(pu => pu.unit === "carrier" && pu.qty > 0)) return false;
+      const s = this.space(seaZoneId);
+      return !!(s && s.sea && s.conn.some(nb =>
+        this.owner[nb] === power && this.unitsAt(nb, x => x.type === "factory").length));
+    }
     cargoOf(t) { return this.units.filter(u => !u.dead && u.onTransport === t.id); }
 
     production(power) {
@@ -614,6 +623,12 @@
         const u = this._spawn(unitType, power, spaceId);
         u.placedThisTurn = true; u.icSpace = icSpace;
         if (carrierForFighter) u.onCarrier = carrierForFighter.id;
+        // a carrier placed this turn seats any friendly fighters that flew out to meet it
+        if (unitType === "carrier") {
+          const waiting = this.unitsAt(spaceId, x => x.type === "fighter" &&
+            this.isFriendly(power, x.power) && !x.onCarrier);
+          for (const f of waiting.slice(0, 2)) f.onCarrier = u.id;
+        }
       }
       pool.qty--;
       this._log(`Mobilized ${unitType} in ${s.name}`);
@@ -622,6 +637,12 @@
       return this.units.filter(u => !u.dead && u.placedThisTurn && u.icSpace === icSpace).length;
     }
     endMobilize() {
+      // A fighter that flew out to meet a purchased carrier goes down if no deck ended up
+      // under it (the carrier wasn't placed in its zone, or the deck filled up first).
+      const stranded = this.units.filter(u => !u.dead && u.type === "fighter" &&
+        u.power === this.current && this.space(u.space).sea && !u.onCarrier);
+      for (const u of stranded) { u.dead = true; this._log(`fighter lost — no carrier placed`); }
+      if (stranded.length) this.units = this.units.filter(u => !u.dead);
       // refund unplaceable units
       let refund = 0;
       for (const p of this.purchases) if (p.qty > 0) refund += p.qty * UNITS[p.unit].cost;
