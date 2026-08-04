@@ -8,7 +8,10 @@ window.Online = (function () {
   const CFG_KEY = "axis.online.cfg";     // {token, repo, name}
   const SEAT_KEY = "axis.online.seats";  // {gameId: "p1"|"p2"}
   const API = "https://api.github.com";
-  const DEFAULT_REPO = "ConikerSystems/axis-multiplayer";
+  // No relay repo is hardcoded. The host enters their own dedicated private repo
+  // ("owner/repo") in Online Setup; it is stored in config and shared with the other
+  // player through the invite link. (Keeps any specific account out of the public source.)
+  const DEFAULT_REPO = "";
 
   // ---------- config ----------
   function config() {
