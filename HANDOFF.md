@@ -89,16 +89,16 @@ carries their GitHub token, so the app now hard-locks what token it will store:
 
 ### Security analysis — separate repo vs separate account (requested)
 - **The real lock is GitHub's server-side token scoping.** A fine-grained token limited
-  to `axis-games` + Contents-only literally cannot read/write any other repo, or touch
+  to `axis-multiplayer` + Contents-only literally cannot read/write any other repo, or touch
   settings/billing/secrets/repo-deletion. GitHub enforces this — not our code.
 - **A separate *repo* (same account) adds NO security** when the token is fine-grained
   and repo-scoped: such a token already can't see any other repo. It would only matter
   against a broad token, which the app now refuses anyway.
 - **A separate *account* is the only thing that adds isolation.** A throwaway free GitHub
-  account (e.g. `coniker-games`) that owns *only* `axis-games` means even a worst-case
+  account (e.g. `coniker-games`) that owns *only* `axis-multiplayer` means even a worst-case
   leak — or a mis-created "All repositories" token — touches a valueless account, never
   the main one. Cost: manage one extra free account; point `DEFAULT_REPO` in `online.js`
-  at `<newaccount>/axis-games`. **Recommended if you want a zero-human-error guarantee.**
+  at `<newaccount>/axis-multiplayer`. **Recommended if you want a zero-human-error guarantee.**
   ✅ **Done (v1.9.7–1.9.8)** — relay moved to `Raj78789494/axis` (the repo created on that account).
 
 ## v1.9.3 (2026-08-02) — selection & movement polish (7 features)
@@ -202,7 +202,7 @@ carries their GitHub token, so the app now hard-locks what token it will store:
 
 ## v1.6 (2026-07-05) — ONLINE TWO-PLAYER ("Play by GitHub")
 - **Async multiplayer through GitHub**: game snapshots sync via the private repo
-  `ConikerSystems/axis-games` (games/<id>.json, every turn = a commit). No server.
+  `ConikerSystems/axis-multiplayer` (games/<id>.json, every turn = a commit). No server.
 - `static/js/online.js`: contents-API get/put with SHA compare-and-swap, unicode-safe
   base64, polling (15s + visibilitychange). Home buttons 🌐 CREATE / JOIN ONLINE GAME;
   one-time setup modal (shared fine-grained PAT + player name, stored in localStorage).
@@ -212,7 +212,7 @@ carries their GitHub token, so the app now hard-locks what token it will store:
   parks on a WAITING screen (poll + CHECK NOW). Receiver gets "IT'S YOUR TURN" with a
   while-you-were-away battle report. Remote defender casualties auto-resolved (AI rules).
   CONTINUE re-syncs online games from GitHub (source of truth). Conflict-safe (CAS).
-- **Joe must create the shared token** (fine-grained PAT, only axis-games repo,
+- **Joe must create the shared token** (fine-grained PAT, only axis-multiplayer repo,
   Contents read/write) and give it to player 2. Never commit it anywhere.
 - Verified: node sync tests vs the real repo (CAS + stale-write rejection), full
   two-device protocol E2E (create→P2 plays Germany→back to P1 at UK), and the whole

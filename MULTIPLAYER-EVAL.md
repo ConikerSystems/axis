@@ -15,7 +15,7 @@ Axis & Allies is **strictly sequential**: the turn order is Russia → Germany �
 That's a much smaller problem than true concurrent multiplayer, and it fits this app well.
 
 ## What already exists (`static/js/online.js`)
-- **"Play by GitHub"**: the whole game is one deterministic JSON snapshot stored as `games/<id>.json` in a private repo (`ConikerSystems/axis-games`). Every turn = one commit.
+- **"Play by GitHub"**: the whole game is one deterministic JSON snapshot stored as `games/<id>.json` in a private repo (`ConikerSystems/axis-multiplayer`). Every turn = one commit.
 - **Baton model**: only the seat whose turn it is writes; writes use the file **SHA as compare-and-swap**, so a stale device can't clobber the game.
 - **Sync**: polling every ~15 s + on tab focus. A player parks on a WAITING screen until it's their turn.
 - Verdict: solid and **serverless**, but it's **async/near-real-time (10–15 s lag)** and only syncs at turn boundaries, not move-by-move.
@@ -62,7 +62,7 @@ Use a hosted realtime DB with a browser SDK; the app stays on GitHub Pages and j
 | D. Self-hosted WebSocket | ~instant | our service | M–L | free tier | we operate a service |
 
 ## Notes on "GitHub public is fine"
-Public **hosting** of the app is already the case (Pages). But the **game-state relay** should stay **private** regardless — a public `axis-games` repo would let anyone read (and, with a token, tamper with) in-progress games. If we move to Option B/D, the realtime store should likewise be locked to the two seats (row-level rules / room tokens).
+Public **hosting** of the app is already the case (Pages). But the **game-state relay** should stay **private** regardless — a public `axis-multiplayer` repo would let anyone read (and, with a token, tamper with) in-progress games. If we move to Option B/D, the realtime store should likewise be locked to the two seats (row-level rules / room tokens).
 
 ## Suggested next step (when you want to act)
 Start with **Option A** (small, in-repo, no new accounts). If the ~3 s feel isn't "live" enough, layer in **Option B** behind the same `Online` interface so the rest of the app doesn't change. Both keep the deterministic-snapshot design that already works.
