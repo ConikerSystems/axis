@@ -1,6 +1,17 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-03 (v1.10.1)_
+_Updated: 2026-08-04 (v1.15.2)_
+
+## v1.15.2 (2026-08-04) — USA Super Bomber mode buffs
+When the **USA Super Bomber** option is on, the whole US air arm is stronger:
+- **Super Bomber** (`engine.js`): **move 24** (reaches anywhere on the map), **cost 12**
+  with its carried infantry (man) included — same price as a plain bomber, so the
+  bomber→super-bomber upgrade is now free. Strike/immunity behavior unchanged.
+- **US fighters** (`combat.js`): attack **and** defense of **6** (a guaranteed d6 hit) via
+  a `pip()` override — only US fighters, only while the option is on. All other powers'
+  fighters, and US fighters with the option off, are unchanged (still 3/4).
+- **Tests:** `tests/superbomber.test.js` (14) — updated stats/upgrade assertions + two new
+  fighter cases (buffed hit on a 6 with the option on; ordinary miss with it off).
 
 ## v1.10.1 (2026-08-03) — modal scroll fix + delete local games
 - **Modal scroll fix** (`style.css`): `.modal-body` now `flex:1 1 auto; min-height:0` so tall
