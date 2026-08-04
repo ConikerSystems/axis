@@ -120,6 +120,10 @@
     unit(id) { return this.units.find(u => u.id === id); }
     _spawn(type, power, space) {
       const u = { id: this.nextUnitId++, type, power, space, moved: 0, hits: 0, cargo: [] };
+      // USA Super Fighter: with the option on, every US fighter flies "super" (attack &
+      // defense 6, u.super). Flagged at creation so starting and newly built US fighters are
+      // super immediately; pre-existing fighters are also flagged at the US turn (below).
+      if (this.options && this.options.superBomber && power === "us" && type === "fighter") u.super = true;
       this.units.push(u); return u;
     }
     _autoLoadStartingCarriers() {
@@ -177,12 +181,17 @@
       this.seaHostileAtStart = new Set();
       for (const [id, s] of Object.entries(this.map.spaces))
         if (s.sea && this.isHostileSpace(p, id)) this.seaHostileAtStart.add(id);
-      // USA Super Bomber: when the option is on, EVERY US bomber is a super bomber —
-      // uniform power so there's never a weaker bomber that could lose. Free auto-upgrade
-      // at the start of the US turn (new US purchases are already super bombers).
+      // USA Super Bomber option: with it on, the whole US air arm flies "super". At the
+      // start of the US turn the existing fleet is upgraded uniformly (so there's never a
+      // weaker piece that could lose): every US bomber becomes a super bomber (type swap)
+      // and every US fighter becomes a super fighter (attack & defense 6, u.super flag).
+      // New US purchases are already super (see _spawn + the purchase-panel bomber swap).
       if (this.options && this.options.superBomber && p === "us") {
-        for (const u of this.units)
-          if (!u.dead && u.power === "us" && u.type === "bomber") u.type = "superbomber";
+        for (const u of this.units) {
+          if (u.dead || u.power !== "us") continue;
+          if (u.type === "bomber") u.type = "superbomber";
+          else if (u.type === "fighter") u.super = true;
+        }
       }
     }
 

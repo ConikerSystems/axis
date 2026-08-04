@@ -499,8 +499,9 @@ window.Board = (function () {
         // group by power then type
         const groups = {};
         for (const u of list) {
-          const k = u.power + "|" + u.type;
-          groups[k] = groups[k] || { power: u.power, type: u.type, n: 0, cargo: 0 };
+          const superF = u.type === "fighter" && !!u.super; // US super fighter
+          const k = u.power + "|" + u.type + (superF ? "|s" : "");
+          groups[k] = groups[k] || { power: u.power, type: u.type, super: superF, n: 0, cargo: 0 };
           groups[k].n++;
           if (u.type === "transport") groups[k].cargo += game.cargoOf(u).length;
           if (u.type === "carrier") groups[k].cargo += game.carrierFighters(u).length;
@@ -525,7 +526,7 @@ window.Board = (function () {
           const yBase = sea ? c[1] - ((rowsN - 1) / 2) * rowSpace : c[1] + 30;
           const y = yBase + row * rowSpace;
           const isCur = game.players && game.current === gr.power;
-          const label = `${POWER_LABEL[gr.power] || ""} ${NAME[gr.type]}${gr.n > 1 ? "  ×" + gr.n : ""}` +
+          const label = `${POWER_LABEL[gr.power] || ""} ${gr.super ? "Super Fighter" : NAME[gr.type]}${gr.n > 1 ? "  ×" + gr.n : ""}` +
             (gr.cargo ? `  ·  ${gr.cargo} aboard` : "");
           const node = el("g", {
             class: "stack" + (isCur ? " draggable" : ""),

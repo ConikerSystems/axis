@@ -167,6 +167,23 @@ t("fires again on its next attack (per-combat flag resets each turn)", () => {
   eq(g.owner["france"], "us", "struck and captured a second time");
 });
 
+t("existing US fighters are upgraded to super at the US turn (u.super)", () => {
+  const g = mk({ options: { superBomber: true } });
+  const f = g._spawn("fighter", "us", "western_united_states");
+  delete f.super;                            // simulate a fighter that predates the option
+  ok(!f.super, "starts unflagged");
+  g.turnIndex = 4; g._snapshotTurnStart();   // arrive at the US turn
+  ok(f.super, "US fighter flagged super at its turn start");
+});
+
+t("US fighters are super on spawn; other powers' fighters never are", () => {
+  const g = mk({ options: { superBomber: true } });
+  ok(g._spawn("fighter", "us", "western_united_states").super, "US fighter super right away");
+  ok(!g._spawn("fighter", "uk", "united_kingdom").super, "UK fighter is never super");
+  const off = mk(); // option off
+  ok(!off._spawn("fighter", "us", "western_united_states").super, "no super when option off");
+});
+
 t("US fighters fire as attack 6 when the super bomber option is on", () => {
   const g = mk({ options: { superBomber: true } });
   g.turnIndex = 4; g.phase = "combat"; // US turn

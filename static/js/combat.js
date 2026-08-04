@@ -24,11 +24,11 @@
   const isLand = (u) => !!UNITS[u.type].land;
   const isTransport = (u) => !!UNITS[u.type].transport;
   const hitClass = (u) => isSub(u) ? "sub" : isAir(u) ? "air" : "normal";
-  // Effective attack/defense pip for a unit. When the USA Super Bomber option is on,
-  // US fighters fly as "super fighters": attack AND defense of 6 (a guaranteed hit on
-  // a d6), matching the boosted air fleet that ships alongside the Super Bomber.
-  const pip = (g, u, attacking) =>
-    (g.options && g.options.superBomber && u.power === "us" && u.type === "fighter")
+  // Effective attack/defense pip for a unit. A US "super fighter" (u.super — set by the
+  // engine when the USA Super Bomber option is on) attacks AND defends at 6, a guaranteed
+  // hit on a d6, matching the boosted US air arm that flies with the Super Bomber.
+  const pip = (u, attacking) =>
+    (u.type === "fighter" && u.super)
       ? 6
       : (attacking ? UNITS[u.type].attack : UNITS[u.type].defense);
 
@@ -195,7 +195,7 @@
       if (attacking && !this.sea) support = units.filter(u => u.type === "artillery" && !u.dead).length;
       const groups = {}; // key: class|value
       for (const u of units) {
-        let v = pip(this.g, u, attacking);
+        let v = pip(u, attacking);
         if (attacking && u.type === "infantry" && support > 0) { v = 2; support--; }
         if (v <= 0) continue;
         const k = hitClass(u) + "|" + v;
@@ -358,7 +358,7 @@
           const canHit = (xs, ys, side) => {
             const dd = xs.some(u => UNITS[u.type].antiSub);
             return xs.some(x => {
-              const v = pip(this.g, x, side === "att");
+              const v = pip(x, side === "att");
               if (v <= 0) return false;
               return ys.some(y => !(isSub(y) && isAir(x) && !dd) && !(isAir(y) && isSub(x)));
             });
