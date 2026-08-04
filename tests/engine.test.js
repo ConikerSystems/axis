@@ -818,5 +818,62 @@ t("carrier bought but never placed under it → lost at end of mobilize", () => 
   ok(f.dead, "no deck ended up under it — lost");
 });
 
+console.log("— carrier capacity: only two fighters per deck —");
+
+const anySea = () => Object.keys(MAP.spaces).find(id => MAP.spaces[id].sea);
+function adjacentSeaPair() {
+  for (const z of Object.keys(MAP.spaces)) {
+    if (!MAP.spaces[z].sea) continue;
+    const adj = MAP.spaces[z].conn.find(n => MAP.spaces[n] && MAP.spaces[n].sea);
+    if (adj) return { a: z, b: adj };
+  }
+  return null;
+}
+
+t("only two fighters seat on a carrier; a 3rd in the zone is lost at end of noncombat", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "noncombatMove";
+  const sz = anySea();
+  const cv = g._spawn("carrier", "us", sz);
+  const a = g._spawn("fighter", "us", sz);
+  const b = g._spawn("fighter", "us", sz);
+  const c = g._spawn("fighter", "us", sz);
+  g.endNoncombatMove();
+  eq([a, b, c].filter(f => !f.dead && f.onCarrier === cv.id).length, 2, "exactly two seated");
+  eq([a, b, c].filter(f => f.dead).length, 1, "the third is lost — no room");
+});
+
+t("_seaLandingRoom counts fighters already waiting in the zone", () => {
+  const g = mk(); g.turnIndex = 4;
+  const sz = anySea();
+  g._spawn("carrier", "us", sz);                     // empty carrier → 2 slots
+  eq(g._seaLandingRoom("us", sz, -1), 2, "empty carrier: room for 2");
+  g._spawn("fighter", "us", sz);                     // one waiting (unseated)
+  eq(g._seaLandingRoom("us", sz, -1), 1, "one waiting → room for 1 more");
+  g._spawn("fighter", "us", sz);                     // two waiting
+  eq(g._seaLandingRoom("us", sz, -1), 0, "two waiting → deck is claimed");
+});
+
+t("a full carrier's zone is not offered to another fighter as a landing spot", () => {
+  const pair = adjacentSeaPair(); ok(pair, "found two adjacent sea zones");
+  const g = mk(); g.turnIndex = 4; g.phase = "noncombatMove";
+  const cv = g._spawn("carrier", "us", pair.b);
+  g._spawn("fighter", "us", pair.b).onCarrier = cv.id;
+  g._spawn("fighter", "us", pair.b).onCarrier = cv.id; // carrier full
+  const f = g._spawn("fighter", "us", pair.a);
+  ok(!g.airLandingSpots(f).some(s => s.space === pair.b), "full-carrier zone not offered");
+  eq(g._seaLandingRoom("us", pair.b, f.id), 0, "no room in the full zone");
+});
+
+t("airCanLandAfter treats a full carrier as no landing spot (was always-true bug)", () => {
+  const g = mk(); g.turnIndex = 4;
+  const sz = anySea();
+  const cv = g._spawn("carrier", "us", sz);
+  const u = g._spawn("fighter", "us", sz); u.moved = UNITS.fighter.move; // no range left
+  ok(g.airCanLandAfter(u, sz, 0), "empty carrier here → can land");
+  g._spawn("fighter", "us", sz).onCarrier = cv.id;
+  g._spawn("fighter", "us", sz).onCarrier = cv.id;    // fill the deck
+  ok(!g.airCanLandAfter(u, sz, 0), "full carrier → cannot land here");
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

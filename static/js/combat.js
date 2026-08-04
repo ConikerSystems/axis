@@ -555,6 +555,19 @@
     return own != null && this.isFriendly(this.current, own) && !this.capturedThisTurn.has(spaceId);
   };
   // spaces where an air unit can legally end the turn, within remaining movement
+  // How many MORE fighters `power` can still land in this sea zone: total open carrier
+  // deck slots (each carrier holds 2) minus the friendly fighters already sitting in the
+  // zone waiting to be seated (each will claim a slot at endNoncombatMove). Excludes the
+  // fighter being tested. >0 means there is still room for one more. This is what stops a
+  // 3rd fighter from being offered a spot two others have already taken.
+  Game.prototype._seaLandingRoom = function (power, zoneId, excludeId) {
+    const carriers = this.unitsAt(zoneId, x => x.type === "carrier" && this.isFriendly(power, x.power));
+    let slots = 0;
+    for (const c of carriers) slots += 2 - this.carrierFighters(c).length;
+    const parked = this.unitsAt(zoneId, x => x.type === "fighter" && this.isFriendly(power, x.power) &&
+      !x.onCarrier && x.id !== excludeId).length;
+    return slots - parked;
+  };
   Game.prototype.airLandingSpots = function (u) {
     const rem = Engine.UNITS[u.type].move - u.moved;
     const spots = [];
@@ -565,9 +578,11 @@
       const s = this.space(id);
       if (!s.sea && this.friendlyAtStart(id)) spots.push({ space: id, cost });
       else if (s.sea && u.type === "fighter") {
+        // only offer if a deck slot is genuinely free once fighters already waiting here
+        // are counted — no over-booking a carrier past its two-fighter capacity
         const carrier = this.unitsAt(id, x => this.isFriendly(x.power, u.power) && x.type === "carrier" &&
           this.carrierFighters(x).length < 2)[0];
-        if (carrier) spots.push({ space: id, cost, carrier: carrier.id });
+        if (carrier && this._seaLandingRoom(u.power, id, u.id) > 0) spots.push({ space: id, cost, carrier: carrier.id });
       }
     }
     return spots;
@@ -594,8 +609,11 @@
       const s = this.space(id);
       if (!s.sea && this.friendlyAtStart(id)) return true;
       if (s.sea && u.type === "fighter") {
-        if (this.unitsAt(id, x => x.power === u.power && x.type === "carrier")) return true;
+        // a carrier only counts as a landing spot if it still has an open deck slot
+        if (this.unitsAt(id, x => x.power === u.power && x.type === "carrier" &&
+          this.carrierFighters(x).length < 2).length) return true;
         const carrierReach = this.units.some(x => !x.dead && x.power === u.power && x.type === "carrier" &&
+          this.carrierFighters(x).length < 2 &&
           x.moved === 0 && (x.space === id || this.space(x.space).conn.includes(id) ||
             this.space(x.space).conn.some(m => this.space(m).sea && this.space(m).conn.includes(id))));
         if (carrierReach) return true;
@@ -613,8 +631,7 @@
       const s = this.space(u.space);
       if (!s.sea && this.friendlyAtStart(u.space)) return false;
       if (u.type === "fighter" && s.sea && (u.onCarrier ||
-        this.unitsAt(u.space, x => this.isFriendly(x.power, u.power) && x.type === "carrier" &&
-          this.carrierFighters(x).length < 2).length ||
+        this._seaLandingRoom(u.power, u.space, u.id) > 0 ||
         this._pendingCarrierZone(u.power, u.space))) return false;
       return true;
     });

@@ -623,11 +623,13 @@
         const u = this._spawn(unitType, power, spaceId);
         u.placedThisTurn = true; u.icSpace = icSpace;
         if (carrierForFighter) u.onCarrier = carrierForFighter.id;
-        // a carrier placed this turn seats any friendly fighters that flew out to meet it
+        // a carrier placed this turn seats any friendly fighters that flew out to meet it,
+        // never past its two-fighter deck
         if (unitType === "carrier") {
+          const room = 2 - this.carrierFighters(u).length;
           const waiting = this.unitsAt(spaceId, x => x.type === "fighter" &&
             this.isFriendly(power, x.power) && !x.onCarrier);
-          for (const f of waiting.slice(0, 2)) f.onCarrier = u.id;
+          for (const f of waiting.slice(0, Math.max(0, room))) f.onCarrier = u.id;
         }
       }
       pool.qty--;
