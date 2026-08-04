@@ -104,7 +104,10 @@ carries their GitHub token, so the app now hard-locks what token it will store:
   (the renamed private relay on the main account). Trade-off: this drops the separate-account
   isolation from v1.9.7 — the shared PAT must be fine-grained, scoped to **only**
   `axis-multiplayer`, Contents read/write, so a leak can't touch anything else on the account.
-  Players need a token valid for the new repo (the old `Raj78789494/axis` token won't work here).
+  **Token carries over the rename:** fine-grained PATs scope access by the repo's internal
+  ID, not its name, so the existing `axis-games` token keeps working against `axis-multiplayer`
+  unchanged — no need to recreate it. (Only a different repo/account, e.g. the old
+  `Raj78789494/axis` token, or an expired/regenerated token, would require a new one.)
 
 ## v1.9.3 (2026-08-02) — selection & movement polish (7 features)
 1. **Selected-piece ring**: the exact stacks you chose in the move picker get a bright
