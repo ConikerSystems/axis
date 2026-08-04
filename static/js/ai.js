@@ -34,7 +34,8 @@
     let p = 0;
     for (const u of units) {
       let v = attacking ? UNITS[u.type].attack : UNITS[u.type].defense;
-      if (attacking && land && u.type === "infantry" && support > 0) { v = 2; support--; }
+      if (u.type === "fighter" && u.super) v = 6; // US super fighter: attack & defense 6
+      else if (attacking && land && u.type === "infantry" && support > 0) { v = 2; support--; }
       p += v;
     }
     return p / 6;

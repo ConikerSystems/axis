@@ -1,6 +1,20 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-04 (v1.15.2)_
+_Updated: 2026-08-04 (v1.15.3)_
+
+## v1.15.3 (2026-08-04) — Super Fighter upgrade + AI awareness
+Makes the fighter buff a proper **upgrade** (parity with the Super Bomber) and teaches the AI.
+- **Super Fighter** (`engine.js`): US fighters now carry a `u.super` flag. Set on spawn (so
+  starting + newly built US fighters are super immediately) **and** at the US turn start,
+  where the existing fleet is upgraded uniformly — every US bomber → super bomber (type swap)
+  and every US fighter → super fighter — so a pre-existing air arm all becomes super at once.
+- **Stats** (`combat.js`): `pip()` now keys off `u.super` (self-describing) instead of an
+  option lookup — a super fighter attacks *and* defends at 6.
+- **AI awareness** (`ai.js`): the battle estimator `punch()` counts a super fighter as 6/6,
+  so the AI values, attacks, and defends with buffed US fighters correctly.
+- **Board** (`board.js`): super fighters are grouped/labelled **"Super Fighter"** (same way
+  the Super Bomber surfaces its name; both share their base silhouette).
+- **Tests:** `tests/superbomber.test.js` (16) — +upgrade-at-turn, +super-on-spawn/never-allied.
 
 ## v1.15.2 (2026-08-04) — USA Super Bomber mode buffs
 When the **USA Super Bomber** option is on, the whole US air arm is stronger:
