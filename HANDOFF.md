@@ -100,6 +100,11 @@ carries their GitHub token, so the app now hard-locks what token it will store:
   the main one. Cost: manage one extra free account; point `DEFAULT_REPO` in `online.js`
   at `<newaccount>/axis-multiplayer`. **Recommended if you want a zero-human-error guarantee.**
   ✅ **Done (v1.9.7–1.9.8)** — relay moved to `Raj78789494/axis` (the repo created on that account).
+  🔁 **Updated (v1.15.1)** — relay `DEFAULT_REPO` re-pointed to `ConikerSystems/axis-multiplayer`
+  (the renamed private relay on the main account). Trade-off: this drops the separate-account
+  isolation from v1.9.7 — the shared PAT must be fine-grained, scoped to **only**
+  `axis-multiplayer`, Contents read/write, so a leak can't touch anything else on the account.
+  Players need a token valid for the new repo (the old `Raj78789494/axis` token won't work here).
 
 ## v1.9.3 (2026-08-02) — selection & movement polish (7 features)
 1. **Selected-piece ring**: the exact stacks you chose in the move picker get a bright
