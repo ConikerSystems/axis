@@ -510,7 +510,36 @@ window.UI = (function () {
         }
         game.endNoncombatMove(); break;
       }
-      case "mobilize": game.endMobilize(); break;
+      case "mobilize": {
+        const list = (ps) => ps.map(p => `${p.qty}× ${UNIT_NAME[p.unit]}`).join(", ");
+        const count = (ps) => ps.reduce((s, p) => s + p.qty, 0);
+        const left = game.unplacedPlaceable();
+        if (left.length) {
+          // BLOCK: these still have somewhere legal to go. Ending here would refund them,
+          // which reads as "my units vanished" — make the player place them instead.
+          openMobilizePanel(left[0].unit);
+          banner(`⚠ ${count(left)} purchased unit(s) still to place (${list(left)}). Tap a green space to place each one — mobilize can't end while they still have somewhere to go.`, true);
+          return;
+        }
+        // only genuinely unplaceable units remain (factories at capacity) — refund is the
+        // only legal outcome, but never silently
+        const stuck = game.purchases.filter(p => p.qty > 0);
+        if (stuck.length) {
+          const cost = stuck.reduce((s, p) => s + p.qty * UNITS[p.unit].cost, 0);
+          const okGo = await confirmModal("UNITS CAN'T BE PLACED",
+            `${count(stuck)} purchased unit(s) (${list(stuck)}) have no legal space left — your factories are at capacity. They will be REFUNDED for ${cost} IPCs instead of built. Continue?`);
+          if (!okGo) return;
+        }
+        // a fighter still hovering at sea with no deck under it goes down at end of mobilize
+        const doomed = game.units.filter(u => !u.dead && u.type === "fighter" &&
+          game.isFriendly(game.current, u.power) && MAP.spaces[u.space].sea && !u.onCarrier);
+        if (doomed.length) {
+          const okGo = await confirmModal("FIGHTERS WILL BE LOST",
+            `${doomed.length} fighter(s) are waiting over open sea with no carrier deck under them and will be LOST. Place a carrier in their sea zone to save them. Continue?`);
+          if (!okGo) return;
+        }
+        game.endMobilize(); break;
+      }
     }
     startPhase();
   }
@@ -862,27 +891,9 @@ window.UI = (function () {
   // each tap places ONE unit, so purchases can be spread across the map freely.
   let mobilizeTarget = null;
   function mobilizeHighlight(ut) {
-    const ids = [];
-    const info = UNITS[ut];
-    if (info.facility) {
-      for (const [id, s] of Object.entries(MAP.spaces)) {
-        if (!s.sea && game.owner[id] === game.current && (s.ipc || 0) >= 1 &&
-          !game.capturedThisTurn.has(id) && !game.unitsAt(id, u => u.type === "factory").length) ids.push(id);
-      }
-    } else {
-      for (const ic of game.eligibleICs(game.current)) {
-        if (game._placedCount(ic) >= game.mobilizeCapacity(ic)) continue;
-        for (const nb of MAP.spaces[ic].conn) {
-          if (!MAP.spaces[nb].sea) continue;
-          if (info.sea) ids.push(nb);                 // sea units: any adjacent sea zone
-          // a fighter may only be placed at sea onto a friendly carrier that has room
-          // (per the rules — place a purchased carrier in the zone first, then the fighter)
-          else if (ut === "fighter" && game.unitsAt(nb, x => x.type === "carrier" &&
-            x.power === game.current && game.carrierFighters(x).length < 2).length) ids.push(nb);
-        }
-        if (!info.sea) ids.push(ic); // fighters & bombers can also go on the IC's land
-      }
-    }
+    // engine.placementSpaces is the single source of truth — it also greens a sea zone for
+    // a fighter when the carrier that will hold it is still waiting to be placed.
+    const ids = game.placementSpaces(ut);
     board.highlight(ids, "place");
     mobilizeTarget = { unit: ut, spaces: new Set(ids) };
     return ids.length;

@@ -4,7 +4,10 @@
    human attacks an AI-defended space.
 
    v1 scope: strong purchase/defense/attack/reinforce play on land and at sea.
-   Not yet: amphibious invasions, strategic bombing raids. */
+   v2 adds amphibious invasions: troops load onto transports at friendly coasts during
+   noncombat, loaded transports sail toward the nearest enemy shore, and in the next
+   combat move an adjacent transport declares the assault (with air support flown in).
+   Not yet: strategic bombing raids. */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory(require("./engine.js"));
   else root.AI = factory(root.Engine);
@@ -133,10 +136,127 @@
     return enemy > mine * 0.8;
   }
 
+  // ---------- amphibious invasions ----------
+  // Sea zones ranked by how close they are to an enemy shore: 0 = already adjacent to an
+  // enemy-held coastal territory. Loaded transports sail down this gradient in noncombat.
+  function invasionSeaMap(g, p) {
+    const dist = new Map(), q = [];
+    for (const [id, s] of Object.entries(g.map.spaces)) {
+      if (!s.sea) continue;
+      const onEnemyShore = s.conn.some(nb => {
+        const ns = g.space(nb);
+        return ns && !ns.sea && !ns.impassable && g.isHostileSpace(p, nb);
+      });
+      if (onEnemyShore) { dist.set(id, 0); q.push(id); }
+    }
+    while (q.length) {
+      const cur = q.shift();
+      for (const nb of g.space(cur).conn) {
+        if (!g.space(nb).sea) continue;
+        if (!dist.has(nb)) { dist.set(nb, dist.get(cur) + 1); q.push(nb); }
+      }
+    }
+    return dist;
+  }
+  // Fill transports from adjacent friendly coasts, heaviest unit first (a tank plus an
+  // infantry is the strongest legal pair). Never strips a territory's last defender.
+  function loadTransports(g) {
+    const p = g.current;
+    for (const tr of g.units.filter(u => !u.dead && u.power === p && u.type === "transport")) {
+      if (tr.usedThisTurn || g.cargoOf(tr).length >= 2) continue;
+      for (const nb of g.space(tr.space).conn) {
+        const s = g.space(nb);
+        if (!s || s.sea || s.impassable) continue;
+        const garrison = g.unitsAt(nb, x => x.power === p && UNITS[x.type].land && !x.onTransport);
+        const troops = garrison.filter(x => x.moved === 0 && !UNITS[x.type].aa)
+          .sort((a, b) => UNITS[b.type].cost - UNITS[a.type].cost);
+        let left = garrison.length;
+        for (const t of troops) {
+          if (g.cargoOf(tr).length >= 2 || left <= 1) break; // leave someone holding the ground
+          if (!g.canLoad(t, tr)) continue;
+          try { g.loadUnit(t.id, tr.id); left--; } catch (e) { /* capacity/adjacency changed */ }
+        }
+        if (g.cargoOf(tr).length >= 2) break;
+      }
+    }
+  }
+  // Loaded transports steer toward the enemy shore, avoiding zones held by enemy warships
+  // (a transport is defenceless, and a contested zone repels the landing anyway).
+  function sailTransports(g, seaDist) {
+    const p = g.current;
+    for (const tr of g.units.filter(u => !u.dead && u.power === p && u.type === "transport")) {
+      if (!g.cargoOf(tr).length || tr.moved >= UNITS.transport.move) continue;
+      let best = null, bestD = seaDist.get(tr.space) ?? 99;
+      for (const [id] of g.reachable(tr, "noncombatMove")) {
+        if (!g.space(id).sea || g.isHostileSpace(p, id)) continue;
+        const d = seaDist.get(id) ?? 99;
+        if (d < bestD) { bestD = d; best = id; }
+      }
+      if (best) { try { g.moveUnit(tr.id, best, "noncombatMove"); } catch (e) {} }
+    }
+  }
+  // Declare amphibious assaults for every loaded transport that can reach an unblocked
+  // staging zone next to a worthwhile enemy coast, then fly in the air support the
+  // estimate counted on. Runs before the general attack pass so that air is still free.
+  function amphibiousAssaults(g) {
+    const p = g.current, L = level(g);
+    const loaded = g.units.filter(u => !u.dead && u.power === p && u.type === "transport" &&
+      g.cargoOf(u).length && !u.usedThisTurn);
+    if (!loaded.length) return;
+    // which of my aircraft could join an attack on each land space (and still land after)
+    const airReach = new Map();
+    for (const u of g.units) {
+      if (u.dead || u.power !== p || !UNITS[u.type].air || u.moved > 0 || u.onTransport) continue;
+      for (const [id, info] of g.reachable(u, "combatMove")) {
+        if (g.space(id).sea || !g.airCanLandAfter(u, id, info.cost)) continue;
+        if (!airReach.has(id)) airReach.set(id, []);
+        airReach.get(id).push(u);
+      }
+    }
+    const claimed = new Set(); // one transport per target, so estimates stay honest
+    for (const tr of loaded) {
+      const cargo = g.cargoOf(tr);
+      const zones = new Set([tr.space]);
+      for (const [id] of g.reachable(tr, "combatMove")) if (g.space(id).sea) zones.add(id);
+      let best = null;
+      for (const zone of zones) {
+        // an enemy surface warship here would repel the landing — stage somewhere clear
+        if (g.isHostileSpace(p, zone)) continue;
+        for (const nb of g.space(zone).conn) {
+          const s = g.space(nb);
+          if (!s || s.sea || s.impassable || claimed.has(nb)) continue;
+          if (!g.isHostileSpace(p, nb) && !g.hasEnemyUnits(p, nb)) continue;
+          const def = g.unitsAt(nb, x => !g.isFriendly(p, x.power) && !UNITS[x.type].facility);
+          const support = airReach.get(nb) || [];
+          const est = estimate(cargo.concat(support), def, true);
+          if (def.length && est.win < L.winThresh) continue;
+          const score = (def.length ? est.win : 1) * (val(g, nb) + 2);
+          if (!best || score > best.score) best = { zone, target: nb, score };
+        }
+      }
+      if (!best) continue;
+      try {
+        if (best.zone !== tr.space) g.moveUnit(tr.id, best.zone, "combatMove");
+        g.offloadTransport(tr.id, best.target);
+        claimed.add(best.target);
+      } catch (e) { continue; /* legality changed under us — leave the troops aboard */ }
+      for (const u of airReach.get(best.target) || []) {
+        try {
+          const r = g.reachable(u, "combatMove");
+          if (r.has(best.target) && g.airCanLandAfter(u, best.target, r.get(best.target).cost))
+            g.moveUnit(u.id, best.target, "combatMove");
+        } catch (e) { /* already committed elsewhere */ }
+      }
+    }
+  }
+
   // ---------- combat move ----------
   function combatMove(g) {
     const p = g.current;
     const L = level(g);
+    // seaborne landings first — they commit transports and their air escort before the
+    // general pass spends that air elsewhere
+    amphibiousAssaults(g);
     // candidate targets: enemy land territories & hostile sea zones adjacent to my forces
     const targets = new Map(); // id -> attackers[]
     for (const u of g.units) {
@@ -211,6 +331,8 @@
     const advance = level(g).advance; // easy AI turtles (holds position); others march to the front
     // distance map to nearest enemy-owned land (through friendly/neutral-free paths, land graph approx)
     const dist = enemyDistanceMap(g, p);
+    // fill transports while the troops still have their full move available
+    loadTransports(g);
     for (const u of g.units.slice()) {
       if (u.dead || u.power !== p || u.onTransport) continue;
       const info = UNITS[u.type];
@@ -227,6 +349,8 @@
       }
       if (best) { try { g.moveUnit(u.id, best, "noncombatMove"); } catch (e) {} }
     }
+    // steer loaded transports toward the shore they'll assault next turn
+    sailTransports(g, invasionSeaMap(g, p));
     // land any remaining aircraft
     for (const u of g.strandedAir()) landAir(g, u);
     g.endNoncombatMove();
@@ -298,5 +422,6 @@
     g.collectIncome();
   }
 
-  return { takeTurn, purchase, combatMove, runBattles, noncombat, mobilize, answer, estimate };
+  return { takeTurn, purchase, combatMove, runBattles, noncombat, mobilize, answer, estimate,
+    amphibiousAssaults, loadTransports, sailTransports, invasionSeaMap };
 });

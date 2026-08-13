@@ -1,6 +1,60 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-04 (v1.15.6)_
+_Updated: 2026-08-13 (v1.16.0)_
+
+## v1.16.0 (2026-08-13) — AI amphibious invasions + mobilize/carrier fixes
+Four things Joe hit playing the USA in a live game.
+
+**1. The computer now invades by sea (`ai.js`).** The long-standing "v1 AI doesn't do
+amphibious invasions" gap is closed. Three new pieces, all going through ordinary engine
+APIs so the AI still can't make an illegal move:
+- `loadTransports` — fills transports from adjacent friendly coasts, heaviest unit first
+  (a tank plus an infantry is the strongest legal pair), and never strips a territory's
+  last defender.
+- `sailTransports` + `invasionSeaMap` — a BFS over sea zones where distance 0 means
+  "borders an enemy-held coast"; loaded transports steer down that gradient, avoiding
+  zones held by enemy warships (a transport is defenceless, and a contested zone repels
+  the landing anyway).
+- `amphibiousAssaults` — runs **first** in combat move, so the air support its estimate
+  counted on is still uncommitted. Picks the best enemy coast reachable from an unblocked
+  staging zone, declares via `offloadTransport`, then flies the supporting aircraft in.
+  One transport per target, so estimates stay honest.
+- Observed in AI-vs-AI runs: US → Italy / France / Northwestern Europe, Germany →
+  Archangel / Caucasus, Japan → Manchuria / Alaska, UK → France. The Allies now hold their
+  own in the smoke games where the Axis used to run away with it.
+
+**2. Mobilize can no longer be ended with units unplaced (the vanishing-units bug).**
+`endMobilize()` silently refunded unplaced purchases and cleared the list, so END PHASE —
+or an accidental press of the big round HOLD button — made bought units disappear.
+- `engine.js`: new `placementSpaces(unitType)` is now the **single source of truth** for
+  where a unit may be placed (the board highlight and the guard both read it, so what the
+  board offers and what `place()` accepts can't drift apart), plus `unplacedPlaceable()`.
+- `ui.js`: END PHASE is **blocked** while any purchase still has a legal space, with a
+  banner naming what's left — the same pattern noncombat already used for stranded
+  aircraft. Genuinely unplaceable units (factories at capacity) still refund, but only
+  behind an explicit confirm that names the IPC amount. A fighter left hovering at sea
+  with no deck under it gets its own confirm before it's lost.
+
+**3. A fighter can be placed at sea before its carrier (rulebook p.16).** `place()` used to
+demand a carrier already sitting in the zone, so buying a carrier + fighter only worked if
+you placed the carrier first — the old code comment admitted it was a workaround.
+- `engine.js`: `_placementDeckRoom` counts open decks already in the zone **plus** two per
+  carrier still waiting to be placed, minus fighters already parked there. `_icForSeaPlacement`
+  makes sure the factory has room for the fighter *and* its carrier, so you can't strand a
+  plane by filling the last slot. Placement order no longer matters either way.
+
+**4. Carrier landings verified end to end**, two fighters per deck. Engine logic was already
+right; confirmed in a real browser session that fighters fly out, seat on the deck, and
+noncombat ends cleanly — and that a 3rd fighter is refused rather than silently drowned.
+
+- **Tests:** `tests/engine.test.js` 61 → **70** (mobilize guard, placement order, deck
+  reservation, IC-capacity trap). New **`tests/ai-amphib.test.js`** (12) covers loading,
+  sailing, assault declaration, the blocked-zone and too-strong-to-take refusals, and a
+  full AI-vs-AI run asserting no land unit is ever adrift. All suites green; smoke OK.
+- **Browser-verified** (Playwright, hand-built save states): the mobilize block, fighter
+  placed at sea before its carrier, two fighters landing on one deck, and a human USA
+  amphibious assault declared on Finland.
+- Version `1.15.6 → 1.16.0`; `sw.js` cache `axis-v57 → axis-v58`.
 
 ## v1.15.6 (2026-08-04) — security hardening + relay repo de-hardcoded
 - **Online play is OFF by default** and gated: the two 🌐 home buttons are grayed/locked
@@ -364,8 +418,8 @@ board (with artillery support, casualties, capture) → noncombat with stranded-
   public `ConikerSystems/axis` repo (a cloud classifier blocked the auto-create). Once
   authorized: `gh repo create ConikerSystems/axis --public --source . --push`, then enable
   Pages on `main` root. URL will be `conikersystems.github.io/axis/`.
-- AI v2: amphibious invasions and strategic bombing (v1 AI fights on land/sea, not by sea
-  invasion or bombing).
+- ✅ **AI amphibious invasions — done in v1.16.0.** Strategic bombing raids are still the
+  remaining AI gap (it fights on land and sea and now invades by sea, but never bombs).
 - Larry Harris Gencon 3.0 alternate scenario (needs its alternate setup data).
 - Low Luck dice mode.
 

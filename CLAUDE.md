@@ -14,8 +14,10 @@ read **[HANDOFF.md](HANDOFF.md)** first for current state and next steps.
 - Rules live in `static/js/engine.js` (state machine) + `static/js/combat.js` (battle
   resolver). `static/js/ai.js` is the computer opponent. `static/js/board.js` renders the
   SVG map; `static/js/ui.js` orchestrates screens/phases/drag-drop.
-- Tests: `node tests/engine.test.js` (29 rules unit tests) and
-  `node tests/smoke.test.js` (full AI-vs-AI games). Run both before any deploy.
+- Tests: `node tests/engine.test.js` (rules unit tests), `node tests/superbomber.test.js`,
+  `node tests/ai-amphib.test.js` (AI seaborne invasions), and `node tests/smoke.test.js`
+  (full AI-vs-AI games). Run all four before any deploy. (`tests/online.test.js` is manual —
+  it needs a network token.)
 
 <!-- SOURCE-POLICY:START -->
 ## Source of truth: GitHub (master) — managed by Claude Hub

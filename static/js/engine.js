@@ -147,6 +147,32 @@
       return !!(s && s.sea && s.conn.some(nb =>
         this.owner[nb] === power && this.unitsAt(nb, x => x.type === "factory").length));
     }
+    // The eligible IC governing a sea-zone placement: an adjacent factory this power owns
+    // that still has `need` slots of mobilize capacity left. Returns its id, or null.
+    _icForSeaPlacement(power, seaZoneId, need = 1) {
+      const s = this.space(seaZoneId);
+      if (!s || !s.sea) return null;
+      const ics = this.eligibleICs(power);
+      for (const nb of s.conn)
+        if (ics.includes(nb) && this.mobilizeCapacity(nb) - this._placedCount(nb) >= need) return nb;
+      return null;
+    }
+    // Deck slots a fighter could still claim in a sea zone during mobilize: open decks on
+    // carriers already there, plus two for each carrier still waiting to be placed (the
+    // zone must have room for the fighter AND that carrier), minus the fighters already
+    // parked in the zone with a claim on those slots. Lets a fighter be placed before its
+    // carrier — placement order doesn't matter (rulebook p.16).
+    _placementDeckRoom(power, seaZoneId) {
+      let slots = 0;
+      for (const c of this.unitsAt(seaZoneId, x => x.type === "carrier" && x.power === power))
+        slots += 2 - this.carrierFighters(c).length;
+      const pool = this.purchases.find(p => p.unit === "carrier" && p.qty > 0);
+      if (pool && this._icForSeaPlacement(power, seaZoneId, 2)) slots += 2 * pool.qty;
+      // any friendly unseated fighter here is already competing for those decks
+      const waiting = this.unitsAt(seaZoneId, x => x.type === "fighter" &&
+        this.isFriendly(power, x.power) && !x.onCarrier).length;
+      return slots - waiting;
+    }
     cargoOf(t) { return this.units.filter(u => !u.dead && u.onTransport === t.id); }
 
     production(power) {
@@ -587,6 +613,36 @@
         !this.capturedThisTurn.has(id) &&
         this.unitsAt(id, u => u.type === "factory" && !u.placedThisTurn).length > 0);
     }
+    // Every space where `unitType` could legally be placed right now. Single source of
+    // truth: the mobilize highlight and the end-of-phase guard both read it, so what the
+    // board offers and what place() accepts can never drift apart.
+    placementSpaces(unitType) {
+      const power = this.current;
+      const info = UNITS[unitType];
+      const ids = new Set();
+      if (info.facility) {
+        for (const [id, s] of Object.entries(this.map.spaces))
+          if (!s.sea && this.owner[id] === power && (s.ipc || 0) >= 1 &&
+            !this.capturedThisTurn.has(id) && !this.unitsAt(id, u => u.type === "factory").length) ids.add(id);
+        return [...ids];
+      }
+      for (const ic of this.eligibleICs(power)) {
+        if (this._placedCount(ic) >= this.mobilizeCapacity(ic)) continue;
+        if (!info.sea) ids.add(ic); // land units and aircraft mobilize on the factory itself
+        for (const nb of this.space(ic).conn) {
+          const ns = this.space(nb);
+          if (!ns || !ns.sea) continue;
+          if (info.sea) ids.add(nb);
+          else if (unitType === "fighter" && this._placementDeckRoom(power, nb) > 0) ids.add(nb);
+        }
+      }
+      return [...ids];
+    }
+    // Purchased units that still have somewhere legal to go. Mobilize must not end while
+    // any of these remain — ending refunds them, which reads to the player as losing them.
+    unplacedPlaceable() {
+      return this.purchases.filter(p => p.qty > 0 && this.placementSpaces(p.unit).length > 0);
+    }
     place(unitType, spaceId) {
       if (this.phase !== "mobilize") throw new Error("wrong phase");
       const power = this.current;
@@ -616,9 +672,10 @@
         if (!icSpace) throw new Error("no eligible IC with capacity adjacent");
         let carrierForFighter = null;
         if (unitType === "fighter" && s.sea) {
+          // A deck already here, or one arriving with a carrier still to be placed.
+          if (this._placementDeckRoom(power, spaceId) <= 0) throw new Error("no carrier space");
           carrierForFighter = this.unitsAt(spaceId, x => x.type === "carrier" && x.power === power &&
-            this.carrierFighters(x).length < 2)[0];
-          if (!carrierForFighter) throw new Error("no carrier space");
+            this.carrierFighters(x).length < 2)[0] || null;
         }
         const u = this._spawn(unitType, power, spaceId);
         u.placedThisTurn = true; u.icSpace = icSpace;
@@ -642,7 +699,7 @@
       // A fighter that flew out to meet a purchased carrier goes down if no deck ended up
       // under it (the carrier wasn't placed in its zone, or the deck filled up first).
       const stranded = this.units.filter(u => !u.dead && u.type === "fighter" &&
-        u.power === this.current && this.space(u.space).sea && !u.onCarrier);
+        this.isFriendly(this.current, u.power) && this.space(u.space).sea && !u.onCarrier);
       for (const u of stranded) { u.dead = true; this._log(`fighter lost — no carrier placed`); }
       if (stranded.length) this.units = this.units.filter(u => !u.dead);
       // refund unplaceable units
