@@ -644,18 +644,20 @@ t("a protecting enemy sub still requires an explicit declaration", () => {
   ok(!g.battles.some(b => b.space === "sz62"), "no auto battle when a sub is present (may bypass)");
 });
 
-t("mobilize: fighter needs a carrier at sea; bomber can't go to sea", () => {
+t("mobilize: a fighter at sea needs a deck (already there or purchased); bomber can't go to sea", () => {
   const g = mk(); g.turnIndex = 4; g.phase = "purchase"; // US
-  g.buy("fighter", 1); g.buy("bomber", 1); g.buy("carrier", 1); g.endPurchase();
+  g.buy("fighter", 1); g.buy("bomber", 1); g.endPurchase();
   g.phase = "mobilize";
   const ic = "eastern_united_states";
   const sz = MAP.spaces[ic].conn.find(n => MAP.spaces[n].sea);
   let fNoCarrier = false; try { g.place("fighter", sz); } catch (e) { fNoCarrier = true; }
-  ok(fNoCarrier, "fighter blocked at sea with no carrier");
+  ok(fNoCarrier, "fighter blocked at sea — no carrier there and none purchased");
   let bomberSea = false; try { g.place("bomber", sz); } catch (e) { bomberSea = true; }
   ok(bomberSea, "bomber cannot be placed at sea");
-  g.place("carrier", sz);   // put the purchased carrier in the zone
-  g.place("fighter", sz);   // now the fighter is allowed, onto that carrier
+  // a purchased carrier gives the fighter a deck to aim for (either placement order)
+  g.purchases.push({ unit: "carrier", qty: 1 });
+  g.place("carrier", sz);
+  g.place("fighter", sz);
   eq(g.unitsAt(sz, u => u.type === "fighter" && u.onCarrier).length, 1, "fighter placed on the carrier");
 });
 
@@ -873,6 +875,122 @@ t("airCanLandAfter treats a full carrier as no landing spot (was always-true bug
   g._spawn("fighter", "us", sz).onCarrier = cv.id;
   g._spawn("fighter", "us", sz).onCarrier = cv.id;    // fill the deck
   ok(!g.airCanLandAfter(u, sz, 0), "full carrier → cannot land here");
+});
+
+console.log("— mobilize can't end while units still have somewhere to go —");
+
+// a US coastal factory with at least `need` mobilize capacity left
+function usCoastalICRoom(g, need) {
+  for (const [id, s] of Object.entries(MAP.spaces)) {
+    if (!s.sea) continue;
+    const ic = s.conn.find(n => g.owner[n] === "us" && g.unitsAt(n, x => x.type === "factory").length);
+    if (ic && g.eligibleICs("us").includes(ic) &&
+      g.mobilizeCapacity(ic) - g._placedCount(ic) >= need) return { seaZone: id, ic };
+  }
+  return null;
+}
+
+t("unplacedPlaceable lists purchases that still have a legal space", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "mobilize";
+  const spot = usCoastalICRoom(g, 2); ok(spot, "found a US coastal IC with room");
+  g.purchases = [{ unit: "infantry", qty: 2 }];
+  const left = g.unplacedPlaceable();
+  eq(left.length, 1, "one unit line still placeable");
+  eq(left[0].qty, 2, "both infantry still to place");
+  ok(g.placementSpaces("infantry").includes(spot.ic), "the factory is offered");
+});
+
+t("unplacedPlaceable empties out as the units go down", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "mobilize";
+  const spot = usCoastalICRoom(g, 2); ok(spot, "found a US coastal IC with room");
+  g.purchases = [{ unit: "infantry", qty: 2 }];
+  g.place("infantry", spot.ic);
+  eq(g.unplacedPlaceable().length, 1, "still one left");
+  g.place("infantry", spot.ic);
+  eq(g.unplacedPlaceable().length, 0, "nothing left to place → phase may end");
+});
+
+t("a unit with nowhere legal to go is not blocking (refund is the only outcome)", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "mobilize";
+  // strip every US factory, so nothing can be mobilized at all
+  for (const u of g.units) if (u.type === "factory" && u.power === "us") u.dead = true;
+  g.units = g.units.filter(u => !u.dead);
+  g.purchases = [{ unit: "infantry", qty: 1 }];
+  eq(g.placementSpaces("infantry").length, 0, "no factory → no legal space");
+  eq(g.unplacedPlaceable().length, 0, "not blocking — the UI may refund it");
+  const before = g.ipc.us;
+  g.endMobilize();
+  eq(g.ipc.us, before + UNITS.infantry.cost, "unplaceable unit is refunded");
+});
+
+t("IC at capacity stops blocking once it is full", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "mobilize";
+  const spot = usCoastalICRoom(g, 1); ok(spot, "found a US coastal IC");
+  const cap = g.mobilizeCapacity(spot.ic);
+  g.purchases = [{ unit: "infantry", qty: cap + 1 }];
+  for (let i = 0; i < cap; i++) g.place("infantry", spot.ic);
+  ok(!g.placementSpaces("infantry").includes(spot.ic), "a full factory is no longer offered");
+});
+
+console.log("— a fighter may be placed at sea before its carrier —");
+
+t("placementSpaces offers the sea zone once a carrier is purchased", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "mobilize";
+  const spot = usCoastalICRoom(g, 2); ok(spot, "found a US coastal IC with room");
+  g.purchases = [{ unit: "fighter", qty: 1 }];
+  ok(!g.placementSpaces("fighter").includes(spot.seaZone), "no carrier bought → sea zone not offered");
+  g.purchases = [{ unit: "fighter", qty: 1 }, { unit: "carrier", qty: 1 }];
+  ok(g.placementSpaces("fighter").includes(spot.seaZone), "carrier bought → sea zone offered");
+});
+
+t("fighter placed BEFORE the carrier seats when the carrier lands", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "mobilize";
+  const spot = usCoastalICRoom(g, 2); ok(spot, "found a US coastal IC with room");
+  g.purchases = [{ unit: "fighter", qty: 1 }, { unit: "carrier", qty: 1 }];
+  g.place("fighter", spot.seaZone);                    // fighter first — used to throw
+  const f = g.unitsAt(spot.seaZone, x => x.type === "fighter")[0];
+  ok(f, "fighter is on the board");
+  ok(!f.onCarrier, "no deck under it yet");
+  g.place("carrier", spot.seaZone);
+  ok(f.onCarrier != null, "it seats on the carrier placed after it");
+  g.endMobilize();
+  ok(!f.dead, "and survives the end of mobilize");
+});
+
+t("placement order doesn't matter — carrier first still works", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "mobilize";
+  const spot = usCoastalICRoom(g, 2); ok(spot, "found a US coastal IC with room");
+  g.purchases = [{ unit: "fighter", qty: 1 }, { unit: "carrier", qty: 1 }];
+  g.place("carrier", spot.seaZone);
+  g.place("fighter", spot.seaZone);
+  const f = g.unitsAt(spot.seaZone, x => x.type === "fighter")[0];
+  ok(f.onCarrier != null, "fighter seats immediately on the carrier already there");
+});
+
+t("a pending carrier reserves exactly two decks — a 3rd fighter is refused", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "mobilize";
+  const spot = usCoastalICRoom(g, 4); ok(spot, "found a US coastal IC with plenty of room");
+  g.purchases = [{ unit: "fighter", qty: 3 }, { unit: "carrier", qty: 1 }];
+  g.place("fighter", spot.seaZone);
+  g.place("fighter", spot.seaZone);
+  eq(g._placementDeckRoom("us", spot.seaZone), 0, "both decks of the pending carrier are claimed");
+  let threw = false;
+  try { g.place("fighter", spot.seaZone); } catch (e) { threw = true; }
+  ok(threw, "the 3rd fighter has no deck and is refused");
+  g.place("carrier", spot.seaZone);
+  eq(g.unitsAt(spot.seaZone, x => x.type === "fighter" && x.onCarrier).length, 2, "both seat on the deck");
+});
+
+t("a fighter is refused at sea when the factory can't fit the carrier too", () => {
+  const g = mk(); g.turnIndex = 4; g.phase = "mobilize";
+  const spot = usCoastalICRoom(g, 1); ok(spot, "found a US coastal IC");
+  // fill the factory down to a single remaining slot — not enough for fighter AND carrier
+  const cap = g.mobilizeCapacity(spot.ic);
+  g.purchases = [{ unit: "infantry", qty: cap - 1 }, { unit: "fighter", qty: 1 }, { unit: "carrier", qty: 1 }];
+  for (let i = 0; i < cap - 1; i++) g.place("infantry", spot.ic);
+  eq(g.mobilizeCapacity(spot.ic) - g._placedCount(spot.ic), 1, "one slot left");
+  ok(!g.placementSpaces("fighter").includes(spot.seaZone),
+    "sea zone not offered — placing the fighter would leave no room for its carrier");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
