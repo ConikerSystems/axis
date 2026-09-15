@@ -1,3 +1,4 @@
 {
-  "master": "github"
+  "master": "github",
+  "test": "/opt/homebrew/bin/node tests/engine.test.js && /opt/homebrew/bin/node tests/superbomber.test.js && /opt/homebrew/bin/node tests/ai-amphib.test.js && /opt/homebrew/bin/node tests/smoke.test.js"
 }

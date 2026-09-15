@@ -428,8 +428,9 @@ board (with artillery support, casualties, capture) → noncombat with stranded-
   (A `.claude/launch.json` "axis" config exists for the preview tool.)
 - Tests: `node tests/engine.test.js`, `node tests/superbomber.test.js`,
   `node tests/ai-amphib.test.js`, `node tests/smoke.test.js`. Run all four before deploy
-  (`tests/online.test.js` is manual; it needs a network token). Node is not installed on
-  the new Mac (2026-09-15), so run them in a cloud session.
+  (`tests/online.test.js` is manual; it needs a network token). Node 26.8.2 is installed on
+  the Mac (Homebrew, 2026-09-15): all four offline suites pass there (70 / 16 / 12 / smoke OK),
+  and `.claude/source.json` `"test"` runs them as the autosave gate.
 - Regenerate board data: clone `github.com/triplea-maps/world_war_ii_v5_1942`, then
   `node tools/convert-triplea.js <that repo>`.
 
