@@ -3,3 +3,26 @@ node_modules/
 *.db
 venv/
 .claude/settings.local.json
+
+# Sensitive files: never commit (Hub-wide safety net, added 2026-09-15)
+*.db
+*.sqlite
+*.sqlite3
+*-wal
+*-shm
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+token*.json
+credentials*.json
+client_secret*.json
+*.db.gz
+*.sql.gz
+uploads/
+node_modules/
+venv/
+__pycache__/
+.DS_Store

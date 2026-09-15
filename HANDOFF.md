@@ -1,6 +1,6 @@
 # HANDOFF — Axis 1942
 
-_Updated: 2026-08-13 (v1.16.0)_
+_Updated: 2026-09-15 (v1.16.0; closing status sections refreshed, no code changes)_
 
 ## v1.16.0 (2026-08-13) — AI amphibious invasions + mobilize/carrier fixes
 Four things Joe hit playing the USA in a live game.
@@ -383,7 +383,9 @@ carries their GitHub token, so the app now hard-locks what token it will store:
 ## Where things stand
 A **complete, playable** digital edition of Axis & Allies 1942 Second Edition as an
 installable PWA. Engine, combat resolver, AI opponent, SVG board, and full UI are built
-and verified. All 29 engine unit tests pass; full AI-vs-AI smoke games run to victory.
+and verified. **Current version: v1.16.0** (`static/js/version.js`; `sw.js` cache `axis-v58`),
+live at https://conikersystems.github.io/axis/. As recorded for v1.16.0: engine tests 70,
+AI-amphib tests 12, super-bomber tests and AI-vs-AI smoke games all green.
 Verified end-to-end in a browser: setup → purchase → drag-drop combat move → dice battle
 board (with artillery support, casualties, capture) → noncombat with stranded-air rescue
 → mobilize/income → hotseat handoff → AI turns → round rollover and victory-city tracking.
@@ -414,10 +416,8 @@ board (with artillery support, casualties, capture) → noncombat with stranded-
   icons, footer/version, Update button, Share/Feedback.
 
 ## Unfinished / future
-- **Deploy to GitHub Pages** is the only remaining step — needs Joe's OK to create the
-  public `ConikerSystems/axis` repo (a cloud classifier blocked the auto-create). Once
-  authorized: `gh repo create ConikerSystems/axis --public --source . --push`, then enable
-  Pages on `main` root. URL will be `conikersystems.github.io/axis/`.
+- ✅ **Deployed** (since v1.1): public repo `ConikerSystems/axis`, GitHub Pages on `main`,
+  live at `conikersystems.github.io/axis/`.
 - ✅ **AI amphibious invasions — done in v1.16.0.** Strategic bombing raids are still the
   remaining AI gap (it fights on land and sea and now invades by sea, but never bombs).
 - Larry Harris Gencon 3.0 alternate scenario (needs its alternate setup data).
@@ -426,12 +426,15 @@ board (with artillery support, casualties, capture) → noncombat with stranded-
 ## How to run / test
 - Local preview: `python3 -m http.server 8642` in the repo root → open `localhost:8642`.
   (A `.claude/launch.json` "axis" config exists for the preview tool.)
-- Tests: `node tests/engine.test.js` and `node tests/smoke.test.js`. Run both before deploy.
+- Tests: `node tests/engine.test.js`, `node tests/superbomber.test.js`,
+  `node tests/ai-amphib.test.js`, `node tests/smoke.test.js`. Run all four before deploy
+  (`tests/online.test.js` is manual; it needs a network token). Node is not installed on
+  the new Mac (2026-09-15), so run them in a cloud session.
 - Regenerate board data: clone `github.com/triplea-maps/world_war_ii_v5_1942`, then
   `node tools/convert-triplea.js <that repo>`.
 
 ## Next steps
-1. Get Joe's go-ahead to create the public GitHub repo, push, enable Pages.
+1. Next AI gap: strategic bombing raids (the AI never bombs).
 2. On iPad Safari: open the Pages URL → Share → Add to Home Screen. Use the in-app 🔄
    Update button after future deploys.
 3. Playtest; gather feedback via the in-app button.
