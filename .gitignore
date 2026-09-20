@@ -26,3 +26,18 @@ node_modules/
 venv/
 __pycache__/
 .DS_Store
+
+# ── .git moved out of iCloud sync scope (2026-09-20) ────────────────────────
+# `~/Documents` is inside macOS Desktop & Documents sync. iCloud makes a
+# "conflict copy" named `<file> 2` when it cannot reconcile two versions of a
+# file, and git's write pattern provokes exactly that: `.git/index` is rewritten
+# in place constantly, and refs are written then renamed atomically. In
+# portfolio_tracker a copy of `refs/remotes/origin/main` appeared as `main 2`
+# and broke `git push` outright ("fatal: bad object"). Files whose NAME ends in
+# `.nosync` are skipped by iCloud, so the real git directory is `.git.nosync`
+# and `.git` is a symlink to it. Git follows the symlink and behaves normally.
+#
+# This line is load-bearing: without it git sees `.git.nosync/` as untracked
+# working-tree content and `git add -A` would try to commit the whole object
+# database into itself.
+.git.nosync/
