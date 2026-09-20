@@ -21,18 +21,54 @@
    Both forms are accepted below. What is never acceptable is `.git` being a
    real DIRECTORY inside sync scope.
 
+   THE THREE STATES THIS MUST PASS IN (2026-09-20)
+   The real fix is to move these repos out of `~/Documents` entirely, and that
+   move is now underway (`claude_hub/REPO_RELOCATION_PLAN.md`). A test that only
+   passed in one state would have to be rewritten across ten repos on the same
+   day the files move, turning two independently revertible events into one flag
+   day. So it is written once to be correct in all three:
+
+     1. NOT macOS          → skip. A cloud session is a fresh clone on Linux with
+                             nothing syncing it; a real `.git` directory is correct
+                             there, and failing it would make this suite unrunnable
+                             in the cloud for no gain.
+     2. INSIDE sync scope  → the fence MUST be present; its absence is a loud
+        (~/Documents,        FAILURE. This is the slide-back detector: a repo back
+         ~/Desktop)          under Desktop & Documents with no fence means iCloud is
+                             in the object database and nobody is watching.
+     3. OUTSIDE sync scope → PASS. No iCloud here, so no fence is needed; a
+        (e.g. ~/claude_code) leftover fence only WARNS. That is what lets the move
+                             and the later unfencing happen on different days.
+
+   Whatever the state, a fence that EXISTS must still WORK: if `.git` points at a
+   `.nosync` directory, that directory must hold a real object database and
+   `.gitignore` must exclude it. Those checks follow the fence, not the location.
+
    Run: node tests/icloud-conflicts.test.mjs                                  */
-import { readdirSync, existsSync, lstatSync, readlinkSync, readFileSync } from "node:fs";
-import { join, dirname, relative } from "node:path";
+import { readdirSync, existsSync, lstatSync, readlinkSync, readFileSync, realpathSync } from "node:fs";
+import { join, dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { homedir, platform } from "node:os";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// The directories macOS "Desktop & Documents" sync covers. Resolved, because a repo
+// reached through a symlink is still physically inside sync scope and iCloud treats
+// it that way. A PATH test, not an iCloud API call: it cannot tell whether the
+// feature is switched on, and it deliberately errs toward demanding the fence.
+const realRoot = (() => { try { return realpathSync(ROOT); } catch { return ROOT; } })();
+const inSyncScope = [join(homedir(), "Documents"), join(homedir(), "Desktop")]
+  .some(d => realRoot === d || realRoot.startsWith(d + sep));
+const isMac = platform() === "darwin";
+const synced = isMac && inSyncScope;
 
 // `<name> 2.ext` and `<name> 2` — what iCloud appends. A THIRD collision is
 // " 3", and so on, so the digit is not pinned to 2.
 const CONFLICT = / \d+(\.[^.]+)?$/;
+// `synctest` is hub-config/test_sync.sh's throwaway sandbox, which iCloud conflict-copies
+// while it sits there; leaving it in scope made merely RUNNING the sandbox fail this test.
 const SKIP = new Set(["venv", ".venv", "node_modules", "__pycache__",
-                      ".git", ".git.nosync", "_legacy"]);
+                      ".git", ".git.nosync", "_legacy", "synctest"]);
 
 const passed = [], failed = [], warned = [];
 const ok = (name, cond, detail = "") => {
@@ -42,6 +78,11 @@ const ok = (name, cond, detail = "") => {
 const warn = (name, detail = "") => {
   warned.push(name);
   console.log(`  !  ${name}${detail ? ": " + detail : ""}`);
+};
+const skipped = [];
+const skip = (name, detail = "") => {
+  skipped.push(name);
+  console.log(`  -  ${name}${detail ? ": " + detail : ""}`);
 };
 
 function walk(dir, skip, out = []) {
@@ -85,6 +126,14 @@ console.log("=".repeat(56));
 console.log("  iCloud conflict-copy checks");
 console.log("=".repeat(56));
 
+// Say which of the three states this run is in, before any result. Without it a reader
+// cannot tell a legitimate "no fence needed" pass from a check that was quietly not
+// performed — and that ambiguity is the failure mode this whole file exists to remove.
+console.log(`\n  ${ROOT}`);
+console.log(!isMac ? `  not macOS (${platform()}) — no iCloud here; fence checks skipped`
+          : synced ? "  INSIDE macOS Desktop & Documents sync — the fence is REQUIRED"
+                   : "  outside macOS Desktop & Documents sync — no fence needed");
+
 console.log("\n── no conflict copies in the working tree ──");
 const allHits = walk(ROOT, SKIP).filter(p => CONFLICT.test(p.split("/").pop()));
 
@@ -109,23 +158,53 @@ if (emptyGit.length) {
   warn(`${emptyGit.length} empty '.git N' director${emptyGit.length === 1 ? "y" : "ies"} left by iCloud`,
        "harmless litter at the old .git path; " +
        emptyGit.map(p => p.split("/").pop()).join("; ") +
-       " — remove with rmdir, and note it is evidence the repo is still " +
-       "inside sync scope");
+       (synced ? " — remove with rmdir, and note it is evidence the repo is still " +
+                 "inside sync scope"
+               : " — leftovers from before the move; nothing recreates them out here, " +
+                 "so remove with rmdir and they stay gone"));
 }
 
 console.log("\n── .git is held outside sync scope ──");
 const { kind, target, real } = gitPointer();
+const fenced = kind === "file" || kind === "symlink";
 
 // iCloud removed this pointer twice in sterling-tasks, which left the repo with
-// no `.git` at all and every git command failing.
+// no `.git` at all and every git command failing. True everywhere: a repo with no
+// `.git` is broken regardless of what is or is not syncing it.
 ok(".git exists", kind !== "missing",
    "there is no .git at all — iCloud may have renamed it to '.git 2'; check " +
    "for that, then restore it with `printf 'gitdir: .git.nosync\\n' > .git`");
-ok(".git is a pointer, not a synced directory",
-   kind === "file" || kind === "symlink",
-   kind === "dir" ? "it is a real directory inside sync scope — iCloud will " +
-                    "resync it and conflict copies will return" : "");
-if (kind === "file" || kind === "symlink") {
+
+// Whether the fence is REQUIRED depends entirely on whether iCloud is here.
+if (!isMac) {
+  skip("the fence is in place where iCloud can reach the repo",
+       `not macOS (${platform()}), so there is no iCloud to fence against`);
+} else if (synced) {
+  // State 2 — the slide-back detector. Loud on purpose.
+  ok("the fence is in place where iCloud can reach the repo", fenced,
+     kind === "dir"
+       ? `${ROOT} is inside macOS Desktop & Documents sync and .git is a real ` +
+         "directory — iCloud is in the object database right now, and conflict " +
+         "copies of refs will return and break push and fetch. Fence it: " +
+         "`mv .git .git.nosync && printf 'gitdir: .git.nosync\\n' > .git`, and add " +
+         "`.git.nosync/` to .gitignore"
+       : "");
+} else {
+  // State 3 — out of sync scope. An unfenced repo is the CORRECT end state and a
+  // leftover fence is merely stale. Warning, not failure: that is what lets the move
+  // and the later unfencing be two separate, independently revertible days.
+  ok("no fence needed — the repo is out of iCloud's reach", true);
+  if (fenced) {
+    warn("the fence is still here but is no longer needed",
+         `${ROOT} is outside Desktop & Documents sync, so nothing is conflict-copying ` +
+         "this repo. The fence is harmless and still works; retire it when convenient " +
+         "with `mv .git.nosync .git` and drop `.git.nosync/` from .gitignore");
+  }
+}
+
+// A fence that EXISTS must WORK, wherever it is. Git reads this pointer on every
+// command, so a broken one is fatal here exactly as it is inside sync scope.
+if (fenced) {
   ok("it points at a `.nosync` name iCloud skips",
      !!target && target.endsWith(".nosync"),
      target ? `points at ${target}` : "the .git file has no `gitdir:` line");
@@ -151,22 +230,33 @@ ok("no other conflict copies under .git", otherHits.length === 0,
    otherHits.slice(0, 5).join("; "));
 
 // Without this line `git add -A` would try to commit the object database into
-// itself. It is the single most important line in .gitignore.
+// itself. It is the single most important line in .gitignore — but only while there
+// IS a `.git.nosync` to ignore. Once the fence is retired the line becomes dead text,
+// and demanding it would turn the unfencing into an edit to this file in every repo
+// on the same day.
 console.log("\n── the fence target is ignored ──");
 const gi = join(ROOT, ".gitignore");
 ok(".gitignore exists", existsSync(gi));
-if (existsSync(gi)) {
+if (!fenced) {
+  skip(".git.nosync/ is ignored",
+       "there is no fence to ignore — .git is a real directory, which git excludes " +
+       "by itself");
+} else if (existsSync(gi)) {
   ok(".git.nosync/ is ignored", readFileSync(gi, "utf8").includes(".git.nosync/"),
      "git would see the whole object database as untracked working-tree content " +
      "and `git add -A` would commit it into itself");
 }
 
-if (failed.length) {
+// Only when a failure actually IS a conflict copy. A missing fence is a different
+// problem with different advice, and `cmp -s 'x 2.js'` sends the reader somewhere
+// useless at the one moment they are reading closely.
+if (failed.some(n => n.includes("conflict") || n.includes("duplicate"))) {
   console.log("\n  TO FIX: these are iCloud conflict copies, not real files.");
   console.log("  Verify each against its original (`cmp -s 'x 2.js' 'x.js'`),");
   console.log("  then move the copies aside. A conflict copy under .git/refs");
   console.log("  must go immediately: it breaks push and fetch.");
 }
 console.log(`\n  ${passed.length} passed, ${failed.length} failed` +
-            (warned.length ? `, ${warned.length} warned` : ""));
+            (warned.length ? `, ${warned.length} warned` : "") +
+            (skipped.length ? `, ${skipped.length} skipped` : ""));
 process.exit(failed.length ? 1 : 0);
