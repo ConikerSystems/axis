@@ -19,18 +19,27 @@ read **[HANDOFF.md](HANDOFF.md)** first for current state and next steps.
   (full AI-vs-AI games). Run all four before any deploy. (`tests/online.test.js` is manual —
   it needs a network token.)
 
-<!-- SOURCE-POLICY:START -->
-## Source of truth: GitHub (master) — managed by Claude Hub
+## Source of truth: GitHub — one rule for every program
 
-**GitHub is the master for Axis 1942.** Develop in the cloud (claude.ai/code, or the Claude app on iPhone) — pick this repo and the "Cloud › Claude" environment. Do NOT develop on the Mac.
+GitHub holds the code. Work wherever suits the task — the Mac, claude.ai/code, or the
+Claude app on iPhone — and let the state of the repo decide what happens, not a setting:
 
-On the Mac this repo is a **replica**: each session pulls from GitHub first (safe fast-forward) and the local copy is never hand-edited. If it is detached to a pointer, `git clone` to restore a local copy. Databases/data stay local regardless — GitHub holds code only.
-<!-- SOURCE-POLICY:END -->
+- **Session start** fast-forwards this repo when the Mac copy is clean and level with
+  GitHub, and **refuses to pull** — naming exactly what is in the way — when it holds
+  uncommitted or unpushed work.
+- **Session end** commits, runs this repo's test gate (`.claude/source.json` → `"test"`)
+  and pushes.
+
+Databases and data stay local on the Mac regardless — GitHub holds code only.
+
+_There used to be a per-app `master` flag here, and a line telling you not to develop on
+the Mac. Both went on 2026-09-20: the flag was a string nobody corroborated, while the
+sync state is measured from git every session._
 
 <!-- SYNC-MERGE-POLICY:START -->
 ## "Sync to GitHub" = merge to `main` (deploy policy)
 
-For any Coniker app where **GitHub is the master**, "sync to GitHub" means the whole relay, not just a push: **commit → push the working branch → merge it into `main` → `main` is the single up-to-date source.** A change parked on an un-merged branch is **not "done"** — don't leave dangling branches for Joe to manage.
+For any Coniker app, "sync to GitHub" means the whole relay, not just a push: **commit → push the working branch → merge it into `main` → `main` is the single up-to-date source.** A change parked on an un-merged branch is **not "done"** — don't leave dangling branches for Joe to manage.
 
 - **Claude tests before merging.** Runs/loads the app off the branch in the cloud and verifies the change does what was asked. Joe does not read or review code. (For Axis, that includes running `node tests/engine.test.js` and `node tests/smoke.test.js` before merging.)
 - **Visual/substantial changes:** Claude sends Joe a **preview screenshot** of the running branch and gets an OK before merging (he reviews a picture, not code). Trivial/docs changes merge without a preview.
